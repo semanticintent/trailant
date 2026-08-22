@@ -5,9 +5,31 @@ description = "A local-first trail index for AI coding sessions — resume, self
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [
+    { name = "Michael Shatny" },
+]
+keywords = ["cli", "claude-code", "codex", "developer-tools", "local-first", "productivity"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Version Control",
+    "Topic :: Utilities",
+]
 dependencies = [
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/semanticintent/trailant"
+Repository = "https://github.com/semanticintent/trailant"
+Issues = "https://github.com/semanticintent/trailant/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
