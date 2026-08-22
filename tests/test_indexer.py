@@ -27,17 +27,17 @@ def test_reindex_finds_fixture_sessions(isolated_home):
     config = _config(fixtures / "claude_code", fixtures / "codex_sessions")
 
     result = reindex(config)
-    # 1 claude_code session + 2 codex rollout files (one of which is a
+    # 2 claude_code sessions + 3 codex rollout files (one of which is a
     # subagent session that read_metadata correctly skips).
-    assert result.scanned == 3
-    assert result.updated == 2
+    assert result.scanned == 5
+    assert result.updated == 4
     assert result.skipped == 1
     assert result.unchanged == 0
 
     records = jsonl_store.read_all(trails_path())
     sources = {r["source"] for r in records}
     assert sources == {"claude_code", "codex"}
-    assert len(records) == 2
+    assert len(records) == 4
 
 
 def test_reindex_is_idempotent_when_files_unchanged(isolated_home):
@@ -48,5 +48,5 @@ def test_reindex_is_idempotent_when_files_unchanged(isolated_home):
     second = reindex(config)
 
     assert second.updated == 0
-    assert second.unchanged == 2
+    assert second.unchanged == 4
     assert second.skipped == 1

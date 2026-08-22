@@ -1,7 +1,38 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Optional
+
+# Tags AI coding tools inject as a literal "user" turn — a slash command's
+# caveat banner, a hook's stdout, a plugin list — rather than something the
+# human actually typed. Best-effort, not exhaustive: vendors add more of
+# these over time, so a session's real opening prompt should be found by
+# skipping past them, not by assuming the first "user" record is it.
+SYSTEM_WRAPPER_TAGS = frozenset({
+    "local-command-caveat",
+    "local-command-stdout",
+    "command-name",
+    "command-message",
+    "command-args",
+    "system-reminder",
+    "user-prompt-submit-hook",
+    "ide_selection",
+    "ide_diagnostics",
+    "recommended_plugins",
+})
+
+_WRAPPER_TAG_RE = re.compile(r"^<([a-zA-Z][\w-]*)>")
+
+
+def is_system_wrapper_text(text: str) -> bool:
+    """True if `text` is a known system-injected wrapper rather than
+    human-typed content — e.g. the <local-command-caveat> block Claude Code
+    inserts after a slash command."""
+    if not text:
+        return False
+    match = _WRAPPER_TAG_RE.match(text.strip())
+    return bool(match) and match.group(1) in SYSTEM_WRAPPER_TAGS
 
 
 def best_effort_date(session: dict) -> str:

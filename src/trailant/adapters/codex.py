@@ -35,6 +35,7 @@ from typing import Optional
 
 from .base import SourceAdapter
 from ..models import SessionMeta
+from ..utils import is_system_wrapper_text
 
 
 class CodexAdapter(SourceAdapter):
@@ -99,7 +100,9 @@ class CodexAdapter(SourceAdapter):
                                 if isinstance(content, list) and content:
                                     block = content[0]
                                     if isinstance(block, dict):
-                                        first_user_text = block.get("text")
+                                        text = block.get("text")
+                                        if text and not is_system_wrapper_text(text):
+                                            first_user_text = text
         except OSError:
             return None
 

@@ -32,3 +32,28 @@ jobs:
 
       - name: Run tests
         run: pytest -v
+
+  guard-personal-data:
+    name: Guard against committed session data
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # trailant's whole job is reading real, personal AI-coding-session
+      # history. The only .jsonl files that belong in this repo are the
+      # fabricated fixtures under tests/fixtures/ — anything else tracked
+      # under that extension is either a real trails.jsonl/marks.jsonl or a
+      # raw vendor session export that should never have been committed.
+      # .gitignore covers the common case; this is the backstop that fails
+      # the build even if it was force-added.
+      - name: Fail if any real-looking trail/session data is tracked
+        run: |
+          matches=$(git ls-files -- '*.jsonl' ':!:tests/fixtures/**')
+          if [ -n "$matches" ]; then
+            echo "::error::Found .jsonl file(s) tracked outside tests/fixtures/ — this looks like real session/trail data, which must never be committed:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "OK: no .jsonl files tracked outside tests/fixtures/."

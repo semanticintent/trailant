@@ -1,0 +1,5 @@
+{"type":"session_meta","payload":{"id":"33334444-aaaa-bbbb-cccc-ddddeeeeffff","cwd":"/home/me/proj/workspace","model_provider":"openai","timestamp":"2026-08-22T20:53:44Z"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<recommended_plugins>\nHere is a list of plugins that are available but not installed.\n</recommended_plugins>"}]},"timestamp":"2026-08-22T20:53:45Z"}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Got it."}]},"timestamp":"2026-08-22T20:53:50Z"}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Add a retry budget to the ingest worker"}]},"timestamp":"2026-08-22T20:54:00Z"}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Adding a retry budget now."}]},"timestamp":"2026-08-22T20:55:00Z"}

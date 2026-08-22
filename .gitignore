@@ -8,3 +8,14 @@ dist/
 
 # derived cache — rebuildable via `trailant reindex`, never a source of truth
 index.db
+
+# trailant's own data dir (real session trails/marks) — this is a personal-
+# data tool by design, so a stray local TRAILANT_HOME pointed inside the repo
+# (e.g. `TRAILANT_HOME=./.trailant` during manual testing) must never get
+# committed. CONTRIBUTING.md's documented workflow already uses /tmp, but
+# this is the backstop in case someone doesn't. tests/fixtures/ holds the
+# only real jsonl fixtures and is intentionally not covered by this.
+.trailant/
+/trails.jsonl
+/marks.jsonl
+/logs/
