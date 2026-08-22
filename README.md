@@ -40,9 +40,9 @@ trying to solve.
 4. **Vendor-agnostic via adapters.** Each AI coding tool gets a small adapter that normalizes its
    session format into one internal shape. Adding a new vendor is a self-contained addition.
 
-See [`docs/technical-overview.md`](docs/technical-overview.md) for the full design spec.
+See [`docs/technical-overview.md`](https://github.com/semanticintent/trailant/blob/main/docs/technical-overview.md) for the full design spec.
 
-Mascot: [**the Trail Ant**](docs/mascot.md) 🐜 — doesn't remember, just reads the trail.
+Mascot: [**the Trail Ant**](https://github.com/semanticintent/trailant/blob/main/docs/mascot.md) 🐜 — doesn't remember, just reads the trail.
 
 ## Install
 
@@ -70,8 +70,8 @@ See `config.example.yaml` in this repo for the full set of options.
 Early / pre-alpha. The Claude Code and Codex adapters are functional against the documented
 session formats; other vendors are not yet implemented. Interfaces may change. Contributions and
 adapters for other tools (Cursor, Gemini CLI, etc.) are very welcome — see
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+[`CONTRIBUTING.md`](https://github.com/semanticintent/trailant/blob/main/CONTRIBUTING.md).
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](https://github.com/semanticintent/trailant/blob/main/LICENSE).
