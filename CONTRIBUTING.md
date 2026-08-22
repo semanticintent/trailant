@@ -42,6 +42,13 @@ Implemented and tested (`pytest` passes, CLI smoke-tested against fixture data):
    (`src/trailant/adapters/base.py`) is meant to make this a self-contained addition — a new
    adapter module, a registry entry in `adapters/__init__.py`, and fixtures/tests mirroring the
    existing two.
+8. **`trailant today`/`trailant week` don't actually summarize the day — they list it.** Each
+   command filters the pre-built `trails.jsonl`/`marks.jsonl` down to the target date(s) and prints
+   each session's already-extracted `ai_title` (a one-time heuristic pick made once at `reindex`
+   time — Claude Code's own `"summary"` record if present, else the first non-wrapper user
+   message). There's no day-level narrative rollup ("today you mostly worked on X, with a detour
+   into Y") — just a per-session listing. Building one would be a new, optional step layered on top
+   of `today`/`week`'s existing output, not a change to how `reindex` extracts `ai_title`.
 
 ## Running tests
 
