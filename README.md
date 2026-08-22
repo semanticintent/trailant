@@ -1,7 +1,7 @@
 # 🐜 trailant
 
 <p align="center">
-  <img src="docs/assets/ant-trail-banner.png" alt="The Trail Ant — trailant's mascot, mid-stride, leaving a glowing trail behind" width="480">
+  <img src="https://raw.githubusercontent.com/semanticintent/trailant/main/docs/assets/ant-trail-banner.png" alt="The Trail Ant — trailant's mascot, mid-stride, leaving a glowing trail behind" width="480">
 </p>
 
 Ants don't remember paths. They lay a trail as they move, and follow the strongest trail back.
