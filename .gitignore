@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+build/
+dist/
+
+# derived cache — rebuildable via `trailant reindex`, never a source of truth
+index.db

@@ -1,0 +1,29 @@
+# Copy to ~/.trailant/config.yaml and adjust paths for your machine.
+# trailant creates a default version of this automatically on first run.
+
+sources:
+  claude_code:
+    enabled: true
+    root: ~/.claude/projects
+  codex:
+    enabled: true
+    root: ~/.codex/sessions
+  # Add future adapters here, e.g.:
+  # cursor:
+  #   enabled: false
+  #   root: ~/.cursor/sessions
+
+self_log:
+  # Where drafted logs go when you confirm sending. Left blank = local-only,
+  # drafts are written to ~/.trailant/logs/ and never sent anywhere.
+  send_to: ""
+  # Optional path to an external executable trailant can shell out to for sending
+  # (e.g. a Windows COM-interop Outlook sender). Leave null to keep drafts local-only.
+  send_via: null
+  # trailant never sends without showing the draft first — this is not optional,
+  # but kept here as a documented, explicit acknowledgement of that behavior.
+  hold_before_send: true
+
+cadence:
+  baseline_window_weeks: 12
+  valley_flag_after_weeks: 8

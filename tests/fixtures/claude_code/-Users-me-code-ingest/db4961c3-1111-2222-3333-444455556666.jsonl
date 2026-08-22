@@ -1,0 +1,5 @@
+{"type":"user","sessionId":"db4961c3-1111-2222-3333-444455556666","uuid":"87bb5552-0001","parentUuid":null,"timestamp":"2026-08-22T09:14:00Z","message":{"role":"user","content":"Help me parse the resume report and extract session titles"}}
+{"type":"assistant","sessionId":"db4961c3-1111-2222-3333-444455556666","uuid":"a1b2c3d4-0002","parentUuid":"87bb5552-0001","timestamp":"2026-08-22T09:14:20Z","message":{"role":"assistant","content":"Sure, here's how to parse it..."}}
+{"type":"user","sessionId":"db4961c3-1111-2222-3333-444455556666","uuid":"87bb5552-0003","parentUuid":"a1b2c3d4-0002","timestamp":"2026-08-22T09:20:00Z","message":{"role":"user","content":"Now add size and prompt count columns"}}
+{"type":"assistant","sessionId":"db4961c3-1111-2222-3333-444455556666","uuid":"a1b2c3d4-0004","parentUuid":"87bb5552-0003","timestamp":"2026-08-22T11:02:00Z","message":{"role":"assistant","content":"Done, added both columns."}}
+{"type":"summary","summary":"Refactor session-resume report parser"}
