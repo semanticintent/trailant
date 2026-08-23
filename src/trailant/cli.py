@@ -10,6 +10,7 @@ import argparse
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from . import jsonl_store
 from .config import load_config, trailant_home
@@ -39,7 +40,16 @@ def _cmd_resume(args) -> None:
         return
     trails.sort(key=lambda s: s.get("started_at") or "", reverse=True)
     limit = args.limit or 15
-    for s in trails[:limit]:
+    shown = trails[:limit]
+
+    if args.html or args.output:
+        from .html_report import render_resume_html
+        output_path = Path(args.output) if args.output else Path("trailant-resume.html")
+        output_path.write_text(render_resume_html(shown), encoding="utf-8")
+        print(f"Wrote HTML report to {output_path}")
+        return
+
+    for s in shown:
         title = s.get("ai_title") or "(untitled)"
         print(f"[{s['source']:11}] {s.get('started_at') or '?':20}  {title}")
         print(f"              project: {s.get('project')}")
@@ -187,21 +197,32 @@ def _cmd_cadence(args) -> None:
     values = [counts[w] for w in weeks_sorted]
     avg = sum(values) / len(values) if values else 0
 
+    # crude valley detection: weeks meaningfully below average, most recent one
+    valley_weeks = [w for w in weeks_sorted if counts[w] < avg * 0.5]
+    valley_note = None
+    if valley_weeks:
+        last_valley = valley_weeks[-1]
+        weeks_since = len(weeks_sorted) - weeks_sorted.index(last_valley) - 1
+        if weeks_since >= valley_flag_after:
+            valley_note = (f"⚠ {weeks_since} weeks since your last low-activity week ({last_valley}). "
+                            f"Historically this is when a valley week has been due — worth considering one.")
+
+    if args.html or args.output:
+        from .html_report import render_cadence_html
+        output_path = Path(args.output) if args.output else Path("trailant-cadence.html")
+        output_path.write_text(render_cadence_html(weeks_sorted, counts, avg, valley_note), encoding="utf-8")
+        print(f"Wrote HTML report to {output_path}")
+        return
+
     print(f"Session count by week (last {len(weeks_sorted)} weeks):")
     for w in weeks_sorted:
         bar = "#" * counts[w]
         print(f"  {w}: {counts[w]:3d}  {bar}")
     print(f"\nAverage: {avg:.1f} sessions/week")
 
-    # crude valley detection: weeks meaningfully below average, most recent one
-    valley_weeks = [w for w in weeks_sorted if counts[w] < avg * 0.5]
-    if valley_weeks:
-        last_valley = valley_weeks[-1]
-        weeks_since = len(weeks_sorted) - weeks_sorted.index(last_valley) - 1
-        if weeks_since >= valley_flag_after:
-            print(f"\n⚠ {weeks_since} weeks since your last low-activity week ({last_valley}). "
-                  f"Historically this is when a valley week has been due — worth considering one.")
-    else:
+    if valley_note:
+        print(f"\n{valley_note}")
+    elif not valley_weeks:
         print(f"\nNo clear valley week detected yet in this window.")
 
 
@@ -214,6 +235,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("resume", help="List recent sessions across all vendors.")
     p.add_argument("--limit", type=int, default=15)
+    p.add_argument("--html", action="store_true",
+                    help="Write a static HTML report instead of printing to the terminal.")
+    p.add_argument("--output", default=None,
+                    help="Path for the HTML report (default: ./trailant-resume.html). Implies --html.")
     p.set_defaults(func=_cmd_resume)
 
     p = sub.add_parser("status", help="Quick 'where was I' summary.")
@@ -234,6 +259,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_week)
 
     p = sub.add_parser("cadence", help="Velocity trend vs. your own baseline.")
+    p.add_argument("--html", action="store_true",
+                    help="Write a static HTML report instead of printing to the terminal.")
+    p.add_argument("--output", default=None,
+                    help="Path for the HTML report (default: ./trailant-cadence.html). Implies --html.")
     p.set_defaults(func=_cmd_cadence)
 
     return parser
