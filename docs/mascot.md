@@ -68,7 +68,7 @@ Fun fact: this isn't a stretch metaphor bolted on after the fact — pheromone t
 ---
 
 **Fact #7:** When pheromone trails cross or loop back on themselves — often after a disturbance — ants can occasionally end up in an "ant mill": a circular procession following each other's trail in an endless loop until they die of exhaustion, unable to break the pattern.
-**Translation:** A naive reindex that re-parses every file on every run, with no gating, is exactly this failure mode — a system dutifully following its own trail into a loop that never terminates productively.
+**Translation:** A naive reindex that re-parses every file on every run, with no gating, is exactly this failure mode — a system dutifully following its own trail into a loop that never terminates productively. `cadence`'s valley flag is the same lesson turned outward: an unbroken high-pace stretch with no interruption isn't the healthy pattern, it's the mill. The flag doesn't fire on a quiet week — it fires on the absence of one for too long.
 
 > "Trust the trail — but not blindly forever. I check where I've already been before I commit to walking it again."
 
