@@ -67,7 +67,7 @@ def test_cli_resume_html_writes_file(isolated_home, monkeypatch, tmp_path):
 
     out_file = tmp_path / "trailant-resume.html"
     assert out_file.exists()
-    assert "trailant" in out_file.read_text()
+    assert "trailant" in out_file.read_text(encoding="utf-8")
 
 
 def test_cli_cadence_html_respects_output_path(isolated_home, monkeypatch, tmp_path):
@@ -85,4 +85,4 @@ def test_cli_cadence_html_respects_output_path(isolated_home, monkeypatch, tmp_p
     main(["cadence", "--output", str(custom_path)])
 
     assert custom_path.exists()
-    assert "cadence" in custom_path.read_text()
+    assert "cadence" in custom_path.read_text(encoding="utf-8")

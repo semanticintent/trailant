@@ -71,10 +71,10 @@ def load_config() -> dict[str, Any]:
 
     path = config_path()
     if not path.exists():
-        path.write_text(yaml.safe_dump(DEFAULT_CONFIG, sort_keys=False))
+        path.write_text(yaml.safe_dump(DEFAULT_CONFIG, sort_keys=False), encoding="utf-8")
         return DEFAULT_CONFIG
 
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
     # Deep-merge over defaults so partially-written configs still work.

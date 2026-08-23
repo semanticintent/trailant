@@ -16,7 +16,7 @@ def read_all(path: Path) -> list[dict]:
     if not path.exists():
         return []
     records = []
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         for line_no, line in enumerate(f, start=1):
             line = line.strip()
             if not line:
@@ -33,7 +33,7 @@ def read_all(path: Path) -> list[dict]:
 
 def append(path: Path, record: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as f:
+    with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
@@ -41,6 +41,6 @@ def write_all(path: Path, records: Iterable[dict]) -> None:
     """Overwrite the file entirely with the given records, one per line.
     Used by reindex, which computes the full desired state in memory first."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
+    with path.open("w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")

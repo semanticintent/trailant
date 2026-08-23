@@ -33,4 +33,4 @@ class SourceAdapter(ABC):
         """Full parse, for on-demand use (e.g. drafting a self-log summary).
         Default implementation just reads the file; adapters with structured
         formats may want to override this to return a cleaner transcript."""
-        return path.read_text(errors="replace")
+        return path.read_text(encoding="utf-8", errors="replace")

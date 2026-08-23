@@ -57,7 +57,7 @@ class ClaudeCodeAdapter(SourceAdapter):
         summary_title: Optional[str] = None
 
         try:
-            with path.open(errors="replace") as f:
+            with path.open(encoding="utf-8", errors="replace") as f:
                 for line in f:
                     line = line.strip()
                     if not line:

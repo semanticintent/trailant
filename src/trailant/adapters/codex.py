@@ -63,7 +63,7 @@ class CodexAdapter(SourceAdapter):
         last_ts: Optional[str] = None
 
         try:
-            with path.open(errors="replace") as f:
+            with path.open(encoding="utf-8", errors="replace") as f:
                 for i, line in enumerate(f):
                     line = line.strip()
                     if not line:

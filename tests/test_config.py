@@ -13,7 +13,7 @@ def test_partial_config_edit_keeps_sibling_defaults(isolated_home):
     """A user editing config.yaml to change one nested field (e.g. disabling
     codex) should not silently drop unrelated defaults like claude_code."""
     load_config()  # bootstraps the default config.yaml on disk
-    config_path().write_text("sources:\n  codex:\n    enabled: false\n")
+    config_path().write_text("sources:\n  codex:\n    enabled: false\n", encoding="utf-8")
 
     config = load_config()
 
