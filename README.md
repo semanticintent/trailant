@@ -66,6 +66,20 @@ trailant cadence --html   # same data as a static HTML report (also on `resume`)
 Configuration lives at `~/.trailant/config.yaml` and is created with sane defaults on first run.
 See `config.example.yaml` in this repo for the full set of options.
 
+## Example output
+
+`--html` on `resume`/`cadence` writes a static, screenshot-ready report instead of printing to
+the terminal (`--output PATH` implies `--html`). These are real renders — synthetic demo data, but
+the actual command output, not a mockup:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/semanticintent/trailant/main/docs/assets/html-report-cadence.png" alt="trailant cadence --html — a 9-week bar chart of session counts" width="600">
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/semanticintent/trailant/main/docs/assets/html-report-resume.png" alt="trailant resume --html — recent sessions across every vendor" width="600">
+</p>
+
 ## Status
 
 Early / pre-alpha. The Claude Code and Codex adapters are functional against the documented
