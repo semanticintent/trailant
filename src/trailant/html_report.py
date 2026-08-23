@@ -22,7 +22,7 @@ _STYLE = """
     color: #e8e6df;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
-  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; max-width: 720px; }
   .ant { font-size: 26px; }
   .brand { font-size: 20px; font-weight: 700; }
   .tag { color: #7fd8d0; font-size: 13px; margin-left: auto; letter-spacing: .03em; }
