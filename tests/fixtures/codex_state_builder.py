@@ -35,6 +35,29 @@ def build_state_db(db_path: Path, threads: list[dict]) -> None:
         conn.close()
 
 
+def build_thread_history_db(db_path: Path, items: list[dict]) -> None:
+    """items: list of {thread_id, item_type} dicts (one row = one item).
+    Only the two columns read_metadata's SQL enrichment actually uses."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("""
+            CREATE TABLE thread_items (
+                thread_id TEXT,
+                turn_id TEXT,
+                item_id TEXT,
+                item_type TEXT
+            )
+        """)
+        for i, it in enumerate(items):
+            conn.execute(
+                "INSERT INTO thread_items (thread_id, turn_id, item_id, item_type) VALUES (?, ?, ?, ?)",
+                (it["thread_id"], f"turn-{i}", f"item-{i}", it["item_type"]),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def build_state_db_missing_rollout_path_column(db_path: Path) -> None:
     """Simulates schema drift: a threads table that exists but doesn't even
     have the one column this adapter absolutely requires."""

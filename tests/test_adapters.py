@@ -5,7 +5,11 @@ import pytest
 
 from trailant.adapters.claude_code import ClaudeCodeAdapter
 from trailant.adapters.codex import CodexAdapter
-from tests.fixtures.codex_state_builder import build_state_db, build_state_db_missing_rollout_path_column
+from tests.fixtures.codex_state_builder import (
+    build_state_db,
+    build_state_db_missing_rollout_path_column,
+    build_thread_history_db,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -316,6 +320,111 @@ def test_codex_sql_prefers_newer_mtime_db_over_lexicographic_sort(tmp_path, monk
 
     assert meta is not None
     assert meta.ai_title == "NEW title"
+
+
+# --- Phase 7b: paginated-mode prompt_count from thread_items ---
+
+
+def test_codex_paginated_prompt_count_comes_from_thread_items_not_jsonl(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    thread_id = "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff"
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": thread_id, "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None, "cwd": None,
+        "title": None, "first_user_message": None,
+        "archived": 0, "name": None, "history_mode": "paginated",
+    }])
+    # The fixture JSONL has 2 user turns — deliberately make the SQL count
+    # disagree (5) so the test actually proves which source wins.
+    build_thread_history_db(codex_home / "thread_history_1.sqlite", [
+        {"thread_id": thread_id, "item_type": "userMessage"},
+        {"thread_id": thread_id, "item_type": "userMessage"},
+        {"thread_id": thread_id, "item_type": "userMessage"},
+        {"thread_id": thread_id, "item_type": "userMessage"},
+        {"thread_id": thread_id, "item_type": "userMessage"},
+        {"thread_id": thread_id, "item_type": "agentMessage"},  # not counted
+    ])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.prompt_count == 5
+
+
+def test_codex_legacy_mode_prompt_count_stays_jsonl_derived_even_if_thread_history_exists(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    thread_id = "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff"
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": thread_id, "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None, "cwd": None,
+        "title": None, "first_user_message": None,
+        "archived": 0, "name": None, "history_mode": "legacy",
+    }])
+    # Even if a thread_history DB happens to have rows for this thread,
+    # "legacy" mode must never consult it.
+    build_thread_history_db(codex_home / "thread_history_1.sqlite", [
+        {"thread_id": thread_id, "item_type": "userMessage"},
+        {"thread_id": thread_id, "item_type": "userMessage"},
+        {"thread_id": thread_id, "item_type": "userMessage"},
+    ])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.prompt_count == 2  # the fixture JSONL's real count, unchanged
+
+
+def test_codex_paginated_mode_falls_back_to_jsonl_count_when_thread_absent_from_thread_items(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff", "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None, "cwd": None,
+        "title": None, "first_user_message": None,
+        "archived": 0, "name": None, "history_mode": "paginated",
+    }])
+    # No thread_history_*.sqlite at all — GROUP BY would have nothing for
+    # this thread_id even if one existed. Absence must resolve to the JSONL
+    # count, not zero and not a crash.
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.prompt_count == 2
+
+
+def test_codex_unrecognized_history_mode_keeps_jsonl_prompt_count(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    thread_id = "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff"
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": thread_id, "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None, "cwd": None,
+        "title": None, "first_user_message": None,
+        "archived": 0, "name": None, "history_mode": "some_future_mode",
+    }])
+    build_thread_history_db(codex_home / "thread_history_1.sqlite", [
+        {"thread_id": thread_id, "item_type": "userMessage"},
+    ])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.prompt_count == 2  # not the SQLite count of 1 — only "paginated" is handled
 
 
 def test_codex_sql_title_is_still_redacted_if_it_looks_like_a_secret(tmp_path, monkeypatch):

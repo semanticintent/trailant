@@ -13,6 +13,12 @@ storage model, confirmed by direct SQL introspection and by asking the real
     in BOTH modes — verified directly on a brand-new paginated-mode thread.
     This is what keeps codex.py's file-based discovery/caching untouched:
     only read_metadata()'s internals change, never list_session_files().
+  - For `history_mode == "paginated"` threads, the actual conversation also
+    lives in `thread_history_*.sqlite`'s `thread_items` table — one row per
+    turn item, with `item_type` (observed: "userMessage", "agentMessage",
+    "commandExecution", "reasoning", "webSearch") and a dedicated index on
+    `item_type = 'userMessage'`, making prompt_count a cheap, authoritative
+    COUNT(*) instead of a JSONL line-scan.
 
 This module only ever reads. Opened as `file:...?mode=ro` (not
 `immutable=1`, which can serve stale data while Codex is actively writing
@@ -100,3 +106,42 @@ def load_threads_index(home: Optional[Path] = None) -> dict[str, dict]:
         finally:
             conn.close()
     return index
+
+
+def load_paginated_user_message_counts(home: Optional[Path] = None) -> dict[str, int]:
+    """Best-effort {thread_id: user-message count} from thread_history_*.sqlite,
+    for paginated-mode threads only. Empty dict on any failure — a thread
+    absent from this dict (no state DB, no thread_history DB, thread has
+    zero items, schema drift) falls through to the JSONL-derived count,
+    which is correct either way: GROUP BY only emits threads with >=1 match,
+    so "absent" and "genuinely zero" both correctly resolve to the JSONL
+    count rather than needing a None sentinel."""
+    home = home or codex_home()
+    counts: dict[str, int] = {}
+    try:
+        db_files = sorted(home.glob("thread_history_*.sqlite"), key=lambda f: f.stat().st_mtime)
+    except OSError:
+        return counts
+
+    # Sum across files, don't overwrite — a thread's items could in
+    # principle be split across an old/new DB pair post-upgrade.
+    for db_path in db_files:
+        try:
+            conn = _ro_connect(db_path)
+        except sqlite3.Error:
+            continue
+        try:
+            cols = _table_columns(conn, "thread_items")
+            if "thread_id" not in cols or "item_type" not in cols:
+                continue
+            rows = conn.execute(
+                "SELECT thread_id, COUNT(*) FROM thread_items "
+                "WHERE item_type = 'userMessage' GROUP BY thread_id"
+            ).fetchall()
+            for thread_id, count in rows:
+                counts[thread_id] = counts.get(thread_id, 0) + count
+        except sqlite3.Error:
+            continue
+        finally:
+            conn.close()
+    return counts

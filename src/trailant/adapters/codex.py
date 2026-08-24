@@ -19,11 +19,13 @@ match is found, prefers its title/cwd/timestamps (Codex's own AI-generated
 title, real cwd, no parsing needed) over what JSONL parsing derives. Any
 miss — no state DB, older Codex, a renamed column, any unexpected shape —
 falls back to the JSONL-only baseline below exactly as before this existed.
-prompt_count stays JSONL-derived regardless of history_mode for now; the
-paginated-mode SQLite prompt count (`thread_items`, cheaper and
-authoritative) is a deliberate fast-follow, not bundled in here, since a
-wrong prompt count would quietly corrupt `cadence`'s trend, a materially
-worse failure than a wrong title.
+For `history_mode == "paginated"` threads, prompt_count is also taken from
+`thread_history_*.sqlite`'s indexed `thread_items` count (cheaper and
+authoritative) rather than the JSONL line-scan — shipped as a deliberate
+fast-follow after the title/cwd enrichment above proved out in production,
+since a wrong prompt count would quietly corrupt `cadence`'s trend, a more
+consequential failure than a wrong title. `history_mode == "legacy"` (or
+any other/missing value) always keeps the JSONL-derived count.
 
 Notes carried over from the technical overview:
   - Codex's own /resume list filters sessions by `model_provider` matching the
@@ -55,7 +57,7 @@ from pathlib import Path
 from typing import Optional
 
 from .base import SourceAdapter
-from .codex_state import load_threads_index
+from .codex_state import load_paginated_user_message_counts, load_threads_index
 from ..models import SessionMeta
 from ..utils import is_system_wrapper_text, looks_like_secret
 
@@ -73,6 +75,7 @@ class CodexAdapter(SourceAdapter):
     def __init__(self, root: Path):
         super().__init__(root)
         self._threads_index: Optional[dict] = None
+        self._paginated_counts: Optional[dict] = None
 
     def list_session_files(self) -> list[Path]:
         if not self.root.exists():
@@ -87,6 +90,12 @@ class CodexAdapter(SourceAdapter):
         if self._threads_index is None:
             self._threads_index = load_threads_index()
         return self._threads_index
+
+    def _get_paginated_counts(self) -> dict:
+        """Same lazy-once-per-instance pattern as _get_threads_index()."""
+        if self._paginated_counts is None:
+            self._paginated_counts = load_paginated_user_message_counts()
+        return self._paginated_counts
 
     def read_metadata(self, path: Path, *, scan_for_secrets: bool = True) -> Optional[SessionMeta]:
         if path.suffix == ".zst":
@@ -156,13 +165,14 @@ class CodexAdapter(SourceAdapter):
             else first_user_text
         )
 
-        # SQL enrichment (Phase 7a) — isolated from the JSONL-derived baseline
-        # above, which stays independently correct. Any unexpected shape
-        # here (schema drift, a column meaning something different than
-        # expected) must fall back to that baseline silently, never abort
-        # read_metadata for the whole file.
+        # SQL enrichment (Phase 7a/7b) — isolated from the JSONL-derived
+        # baseline above, which stays independently correct. Any unexpected
+        # shape here (schema drift, a column meaning something different
+        # than expected) must fall back to that baseline silently, never
+        # abort read_metadata for the whole file.
         archived = False
         sql_title = None
+        sql_prompt_count = None
         thread = self._get_threads_index().get(str(path))
         if thread is None:
             thread = self._get_threads_index().get(str(path.resolve()))
@@ -178,9 +188,15 @@ class CodexAdapter(SourceAdapter):
                     last_ts = sql_last_ts
                 sql_title = thread.get("name") or thread.get("title") or thread.get("first_user_message")
                 archived = bool(thread.get("archived"))
+                if thread.get("history_mode") == "paginated":
+                    sql_prompt_count = self._get_paginated_counts().get(thread.get("id"))
             except Exception:
                 sql_title = None
                 archived = False
+                sql_prompt_count = None
+
+        if sql_prompt_count is not None:
+            prompt_count = sql_prompt_count
 
         ai_title = sql_title or first_prompt_title
         if ai_title and scan_for_secrets and looks_like_secret(ai_title):
