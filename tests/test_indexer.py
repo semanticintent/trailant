@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from trailant import jsonl_store
-from trailant.indexer import reindex, trails_path
+from trailant.indexer import INDEX_SCHEMA_VERSION, reindex, trails_path
 
 
 @pytest.fixture
@@ -27,17 +27,17 @@ def test_reindex_finds_fixture_sessions(isolated_home):
     config = _config(fixtures / "claude_code", fixtures / "codex_sessions")
 
     result = reindex(config)
-    # 2 claude_code sessions + 3 codex rollout files (one of which is a
+    # 5 claude_code sessions + 3 codex rollout files (one of which is a
     # subagent session that read_metadata correctly skips).
-    assert result.scanned == 5
-    assert result.updated == 4
+    assert result.scanned == 8
+    assert result.updated == 7
     assert result.skipped == 1
     assert result.unchanged == 0
 
     records = jsonl_store.read_all(trails_path())
     sources = {r["source"] for r in records}
     assert sources == {"claude_code", "codex"}
-    assert len(records) == 4
+    assert len(records) == 7
 
 
 def test_reindex_is_idempotent_when_files_unchanged(isolated_home):
@@ -48,5 +48,23 @@ def test_reindex_is_idempotent_when_files_unchanged(isolated_home):
     second = reindex(config)
 
     assert second.updated == 0
-    assert second.unchanged == 4
+    assert second.unchanged == 7
+    assert second.skipped == 1
+
+
+def test_reindex_reparses_when_schema_version_is_stale(isolated_home):
+    fixtures = Path(__file__).parent / "fixtures"
+    config = _config(fixtures / "claude_code", fixtures / "codex_sessions")
+
+    reindex(config)
+    records = jsonl_store.read_all(trails_path())
+    for r in records:
+        assert r["_index_schema_version"] == INDEX_SCHEMA_VERSION
+        del r["_index_schema_version"]  # simulate an index written before this field existed
+    jsonl_store.write_all(trails_path(), records)
+
+    second = reindex(config)
+
+    assert second.updated == 7
+    assert second.unchanged == 0
     assert second.skipped == 1

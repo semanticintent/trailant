@@ -21,3 +21,12 @@ def test_unknown_leading_tag_is_not_flagged():
 
 def test_empty_text_is_not_flagged():
     assert is_system_wrapper_text("") is False
+
+
+def test_environment_context_tag_is_detected():
+    assert is_system_wrapper_text("<environment_context>cwd: /home/me</environment_context>") is True
+
+
+def test_agents_md_prefix_is_detected():
+    # Confirmed verbatim from a real Windows session's generated HTML output.
+    assert is_system_wrapper_text("# AGENTS.md instructions\n\nFollow these rules...") is True

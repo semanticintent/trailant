@@ -15,6 +15,12 @@ from . import jsonl_store
 from .adapters import ADAPTERS
 from .config import enabled_sources, trailant_home
 
+# Bumped whenever adapter extraction logic changes in a way that should
+# force re-parsing of already-indexed, unchanged files — otherwise the
+# mtime/size cache below would keep serving stale metadata (e.g. an old
+# title) forever, since nothing about the source file itself changed.
+INDEX_SCHEMA_VERSION = 2
+
 
 @dataclass
 class ReindexResult:
@@ -54,6 +60,7 @@ def reindex(config: dict) -> ReindexResult:
                 cached
                 and cached.get("file_mtime") == stat.st_mtime
                 and cached.get("size_bytes") == stat.st_size
+                and cached.get("_index_schema_version") == INDEX_SCHEMA_VERSION
             ):
                 result.unchanged += 1
                 continue
@@ -63,7 +70,9 @@ def reindex(config: dict) -> ReindexResult:
                 result.skipped += 1
                 continue
 
-            result_records[key] = meta.to_dict()
+            record = meta.to_dict()
+            record["_index_schema_version"] = INDEX_SCHEMA_VERSION
+            result_records[key] = record
             result.updated += 1
 
     jsonl_store.write_all(path, result_records.values())

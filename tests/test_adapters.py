@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from trailant.adapters.claude_code import ClaudeCodeAdapter
@@ -13,6 +14,9 @@ def test_claude_code_lists_session_file():
     assert names == {
         "db4961c3-1111-2222-3333-444455556666.jsonl",
         "f00dcafe-1111-2222-3333-444455556666.jsonl",
+        "a1b2c3d4-1111-2222-3333-444455556666.jsonl",
+        "b2c3d4e5-1111-2222-3333-444455556666.jsonl",
+        "c3d4e5f6-1111-2222-3333-444455556666.jsonl",
     }
 
 
@@ -43,6 +47,66 @@ def test_claude_code_skips_wrapper_tag_when_picking_title():
     # first real prompt instead of surfacing the wrapper text.
     assert meta.prompt_count == 2
     assert meta.ai_title == "Fix the invoice rounding bug in the billing job"
+
+
+def test_claude_code_ai_title_record_wins_and_last_one_wins():
+    adapter = ClaudeCodeAdapter(FIXTURES / "claude_code")
+    path = FIXTURES / "claude_code" / "-Users-me-code-search" / "a1b2c3d4-1111-2222-3333-444455556666.jsonl"
+    meta = adapter.read_metadata(path)
+
+    assert meta is not None
+    # Two ai-title records in this fixture, no summary, no user-set name —
+    # the second (most recent) one should win, not the truncated first
+    # prompt and not the first ai-title seen.
+    assert meta.ai_title == "Speed up search indexing with a cache layer"
+
+
+def test_claude_code_cwd_beats_lossy_path_decoder():
+    adapter = ClaudeCodeAdapter(FIXTURES / "claude_code")
+    path = FIXTURES / "claude_code" / "-Users-me-code-my-project-v2" / "b2c3d4e5-1111-2222-3333-444455556666.jsonl"
+    meta = adapter.read_metadata(path)
+
+    assert meta is not None
+    # The directory name encodes the literal "." in "my-project.v2" as "-",
+    # which the decoder can't tell apart from a real path separator and
+    # would mangle. The real cwd on the transcript line is authoritative.
+    assert meta.project == "/Users/me/code/my-project.v2"
+
+
+def test_claude_code_user_set_name_wins_over_ai_title():
+    adapter = ClaudeCodeAdapter(FIXTURES / "claude_code")
+    path = FIXTURES / "claude_code" / "-Users-me-code-notes" / "c3d4e5f6-1111-2222-3333-444455556666.jsonl"
+    meta = adapter.read_metadata(path)
+
+    assert meta is not None
+    # tests/fixtures/sessions/42.json maps this session id to a user-set
+    # name — it should beat the ai-title record present in the same
+    # transcript.
+    assert meta.ai_title == "tidy the export format"
+
+
+def test_claude_code_malformed_sessions_file_does_not_break_indexing(tmp_path):
+    claude_root = tmp_path / "claude_code"
+    project_dir = claude_root / "-Users-me-code-x"
+    project_dir.mkdir(parents=True)
+    session_id = "d4e5f6a7-1111-2222-3333-444455556666"
+    (project_dir / f"{session_id}.jsonl").write_text(
+        json.dumps({
+            "type": "user", "sessionId": session_id, "uuid": "1", "parentUuid": None,
+            "timestamp": "2026-08-24T12:00:00Z",
+            "message": {"role": "user", "content": "hello"},
+        }) + "\n",
+        encoding="utf-8",
+    )
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    (sessions_dir / "99.json").write_text("not valid json{{{", encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter(claude_root)
+    meta = adapter.read_metadata(project_dir / f"{session_id}.jsonl")
+
+    assert meta is not None
+    assert meta.ai_title == "hello"  # falls through cleanly to the first prompt
 
 
 def test_codex_lists_session_file():

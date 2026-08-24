@@ -1,0 +1,6 @@
+{"type":"user","sessionId":"a1b2c3d4-1111-2222-3333-444455556666","uuid":"11110001","parentUuid":null,"timestamp":"2026-08-24T09:00:00Z","message":{"role":"user","content":"Help me index the search results faster"}}
+{"type":"ai-title","sessionId":"a1b2c3d4-1111-2222-3333-444455556666","aiTitle":"Speed up search indexing"}
+{"type":"assistant","sessionId":"a1b2c3d4-1111-2222-3333-444455556666","uuid":"11110002","parentUuid":"11110001","timestamp":"2026-08-24T09:01:00Z","message":{"role":"assistant","content":"Looking at the indexer now..."}}
+{"type":"user","sessionId":"a1b2c3d4-1111-2222-3333-444455556666","uuid":"11110003","parentUuid":"11110002","timestamp":"2026-08-24T09:10:00Z","message":{"role":"user","content":"Also add a cache layer"}}
+{"type":"ai-title","sessionId":"a1b2c3d4-1111-2222-3333-444455556666","aiTitle":"Speed up search indexing with a cache layer"}
+{"type":"assistant","sessionId":"a1b2c3d4-1111-2222-3333-444455556666","uuid":"11110004","parentUuid":"11110003","timestamp":"2026-08-24T09:20:00Z","message":{"role":"assistant","content":"Added a cache layer."}}

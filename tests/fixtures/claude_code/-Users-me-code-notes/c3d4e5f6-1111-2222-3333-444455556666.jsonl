@@ -1,0 +1,3 @@
+{"type":"user","sessionId":"c3d4e5f6-1111-2222-3333-444455556666","uuid":"33330001","parentUuid":null,"timestamp":"2026-08-24T11:00:00Z","message":{"role":"user","content":"Clean up the notes export format"}}
+{"type":"ai-title","sessionId":"c3d4e5f6-1111-2222-3333-444455556666","aiTitle":"Clean up notes export format"}
+{"type":"assistant","sessionId":"c3d4e5f6-1111-2222-3333-444455556666","uuid":"33330002","parentUuid":"33330001","timestamp":"2026-08-24T11:10:00Z","message":{"role":"assistant","content":"Cleaned it up."}}

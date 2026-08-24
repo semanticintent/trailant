@@ -20,7 +20,15 @@ SYSTEM_WRAPPER_TAGS = frozenset({
     "ide_selection",
     "ide_diagnostics",
     "recommended_plugins",
+    "environment_context",
 })
+
+# Some wrapper content isn't an XML-style tag at all — a Codex markdown
+# heading, confirmed verbatim from a real Windows session's generated HTML
+# output rather than guessed.
+SYSTEM_WRAPPER_PREFIXES = (
+    "# AGENTS.md instructions",
+)
 
 _WRAPPER_TAG_RE = re.compile(r"^<([a-zA-Z][\w-]*)>")
 
@@ -28,11 +36,15 @@ _WRAPPER_TAG_RE = re.compile(r"^<([a-zA-Z][\w-]*)>")
 def is_system_wrapper_text(text: str) -> bool:
     """True if `text` is a known system-injected wrapper rather than
     human-typed content — e.g. the <local-command-caveat> block Claude Code
-    inserts after a slash command."""
+    inserts after a slash command, or Codex's <environment_context> /
+    AGENTS.md scaffolding."""
     if not text:
         return False
-    match = _WRAPPER_TAG_RE.match(text.strip())
-    return bool(match) and match.group(1) in SYSTEM_WRAPPER_TAGS
+    stripped = text.strip()
+    match = _WRAPPER_TAG_RE.match(stripped)
+    if match and match.group(1) in SYSTEM_WRAPPER_TAGS:
+        return True
+    return stripped.startswith(SYSTEM_WRAPPER_PREFIXES)
 
 
 def best_effort_date(session: dict) -> str:
