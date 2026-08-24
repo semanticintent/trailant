@@ -19,6 +19,7 @@ SYSTEM_WRAPPER_TAGS = frozenset({
     "user-prompt-submit-hook",
     "ide_selection",
     "ide_diagnostics",
+    "ide_opened_file",
     "recommended_plugins",
     "environment_context",
 })

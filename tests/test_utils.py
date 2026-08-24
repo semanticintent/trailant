@@ -30,3 +30,9 @@ def test_environment_context_tag_is_detected():
 def test_agents_md_prefix_is_detected():
     # Confirmed verbatim from a real Windows session's generated HTML output.
     assert is_system_wrapper_text("# AGENTS.md instructions\n\nFollow these rules...") is True
+
+
+def test_ide_opened_file_tag_is_detected():
+    # Found via a benchmark against real data: a 209MB session's title
+    # surfaced as this wrapper instead of a real prompt.
+    assert is_system_wrapper_text("<ide_opened_file>The user opened the file /a/b.py</ide_opened_file>") is True

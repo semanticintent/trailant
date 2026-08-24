@@ -155,6 +155,17 @@ def _cmd_diff(args) -> None:
     _write_diff_snapshot(current)
 
 
+# The blocker to resuming yesterday's work usually isn't the vendor
+# command — it's not knowing which directory to run it from, since
+# `claude --resume` / `codex resume` only see sessions belonging to the
+# current working directory. Unknown/future vendors just don't get a
+# resume line (graceful degradation, no guessing).
+RESUME_COMMANDS = {
+    "claude_code": "claude --resume {session_id}",
+    "codex": "codex resume {session_id}",
+}
+
+
 def _cmd_resume(args) -> None:
     trails = load_trails()
     if not trails:
@@ -177,6 +188,11 @@ def _cmd_resume(args) -> None:
         print(f"              project: {s.get('project')}")
         print(f"              session: {s['session_id']}  "
               f"prompts={s.get('prompt_count', 0)}  size={human_size(s.get('size_bytes', 0))}")
+        if args.print_command:
+            template = RESUME_COMMANDS.get(s.get("source"))
+            if template:
+                cmd = template.format(session_id=s["session_id"])
+                print(f"              resume:  cd {s.get('project')} && {cmd}")
         print()
 
 
@@ -398,6 +414,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Write a static HTML report instead of printing to the terminal.")
     p.add_argument("--output", default=None,
                     help="Path for the HTML report (default: ./trailant-resume.html). Implies --html.")
+    p.add_argument("--print-command", action="store_true",
+                    help="Also print the exact resume command for each session "
+                         "(e.g. `claude --resume <id>`). Text output only — pure text, "
+                         "prints the command rather than running it.")
     p.set_defaults(func=_cmd_resume)
 
     p = sub.add_parser("status", help="Quick 'where was I' summary.")

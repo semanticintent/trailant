@@ -62,6 +62,7 @@ trailant log "debugging the retry logic in the ingest job"   # manual entry, no 
 trailant cadence          # velocity trend vs. your own baseline
 trailant cadence --html   # same data as a static HTML report (also on `resume`)
 trailant diff             # what changed in the index since the last `diff` run
+trailant resume --print-command   # also print the exact `claude --resume <id>` / `codex resume <id>`
 ```
 
 Configuration lives at `~/.trailant/config.yaml` and is created with sane defaults on first run.

@@ -109,7 +109,7 @@ def test_resume_sorts_by_activity_not_started_at(isolated_home, capsys):
     # Written deliberately out of activity order.
     jsonl_store.write_all(trails_path(), [should_be_second, should_be_first])
 
-    cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None))
+    cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None, print_command=False))
     out = capsys.readouterr().out
 
     assert out.index("Should be first") < out.index("Should be second")
@@ -219,6 +219,37 @@ def test_status_flags_a_configured_source_with_zero_sessions(isolated_home, caps
 
     assert "codex: 0 sessions" in out
     assert "⚠" in out
+
+
+def test_resume_print_command_shows_the_real_vendor_resume_command(isolated_home, capsys):
+    record = _trail_record("s1", source="claude_code", project="/Users/me/code/x",
+                            ai_title="Fix the thing")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None, print_command=True))
+    out = capsys.readouterr().out
+
+    assert "resume:  cd /Users/me/code/x && claude --resume s1" in out
+
+
+def test_resume_without_print_command_omits_resume_line(isolated_home, capsys):
+    record = _trail_record("s1", source="claude_code", project="/Users/me/code/x")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None, print_command=False))
+    out = capsys.readouterr().out
+
+    assert "resume:" not in out
+
+
+def test_resume_print_command_skips_unknown_source(isolated_home, capsys):
+    record = _trail_record("s1", source="some_future_vendor", project="/x")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None, print_command=True))
+    out = capsys.readouterr().out
+
+    assert "resume:" not in out  # no crash, no guessed command
 
 
 # --- Phase 4: `trailant diff` ("what changed since last run") ---

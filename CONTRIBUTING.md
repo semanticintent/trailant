@@ -12,8 +12,12 @@ Implemented and tested (`pytest` passes, CLI smoke-tested against fixture data):
 - JSONL append/upsert/write-all store (`src/trailant/jsonl_store.py`)
 - Claude Code adapter, tested against a realistic fixture
 - Codex adapter, tested against a realistic fixture
-- mtime/size-gated reindexing (`src/trailant/indexer.py`)
-- CLI commands: `reindex`, `resume`, `status`, `log`, `close`, `today`, `week`, `cadence`
+- mtime/size-gated reindexing, with a schema-version stamp that forces a one-time
+  re-parse of already-indexed files when adapter extraction logic changes (`src/trailant/indexer.py`)
+- Cross-platform CI (ubuntu/macos/windows × Python 3.10/3.12) plus a Windows-console-encoding
+  regression test that doesn't require an actual Windows machine to run
+- CLI commands: `reindex`, `diff`, `resume` (`--html`, `--print-command`), `status`, `log`, `close`,
+  `today`, `week`, `cadence` (`--html`)
 
 ## Known limitations / good first issues
 
@@ -25,19 +29,30 @@ Implemented and tested (`pytest` passes, CLI smoke-tested against fixture data):
    `None` for these today. Decompressing requires the `zstandard` package, deliberately not added
    yet to keep the dependency footprint minimal — worth reconsidering once it's a real gap in
    people's data.
-3. **Codex adapter reads full file contents for metadata**, even though only the first
-   (`session_meta`) line is strictly required for most fields — prompt count and title currently
-   require a full scan. For very large rollout files (some have been observed in the hundreds of
-   MB to low GB range) this is the main performance risk. A tail-seek or streaming approach that
-   stops early once title/count are found would help.
+3. **Both adapters read full file contents for metadata**, even though only the first line or
+   two is strictly required for some fields — prompt count and `ended_at` genuinely need a full
+   scan (every line can update them), so a naive "stop after N lines" bound would silently
+   truncate those on any real session past that bound, and Phase 2's activity-based reporting
+   (`status`/`today`/`week`/`cadence`) leans on `ended_at` being accurate. Measured directly
+   against a real 209MB Claude Code transcript: 0.44s — not the crisis a truncated-read fix would
+   imply, since `reindex`'s mtime/size cache already means this cost is only paid once per file
+   that actually changed, not on every run. The real fix here is incremental (persist a byte
+   offset and running aggregates, resume from there on the next changed-file scan) rather than a
+   lossy line-count bound — genuinely valuable for a transcript that grows across many sessions
+   over a long career, just not an acute problem at today's usage scale. Deliberately deferred
+   rather than rushed.
 4. **`trailant close` has no working `send_via`.** It drafts and saves a mark locally but does not
    actually send anywhere — the Outlook/email integration described in the technical overview is
    intentionally left as a pluggable external hook, not part of the open-source core.
 5. **No SQLite cache tier yet**, by design (see `docs/technical-overview.md` §2-3, §9) — only
    add one once `resume`/`cadence` are demonstrably slow at real-world trail counts, not before.
-6. **Claude Code project path decoding is lossy.** Directory names encode `/` as `-`, so a project
-   path that itself contains a literal `-` can't be perfectly reconstructed. Fine for display,
-   worth flagging if it ever needs to be used for anything write-back-capable.
+6. **Claude Code project path decoding is lossy — mostly moot now.** Directory names encode `/`,
+   `:`, and `.` all as `-`, so a project path containing any of those can't be perfectly
+   reconstructed from the directory name alone. `read_metadata` now reads the real `cwd` directly
+   off the transcript line when present (confirmed present on the large majority of real lines
+   checked) and only falls back to the lossy decoder when it isn't — narrows this from "every
+   session" to "the rare line missing `cwd`," but the decoder itself is still exactly as lossy as
+   before for that fallback case.
 7. **No adapters yet for Cursor, Gemini CLI, or other vendors.** The adapter interface
    (`src/trailant/adapters/base.py`) is meant to make this a self-contained addition — a new
    adapter module, a registry entry in `adapters/__init__.py`, and fixtures/tests mirroring the
