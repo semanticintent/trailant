@@ -23,6 +23,7 @@ class SessionMeta:
     file_mtime: float
     ai_title: Optional[str] = None
     secret_hits: int = 0        # count of lines that looked like they held a credential
+    archived: bool = False      # vendor-reported archived state, where available (e.g. Codex)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

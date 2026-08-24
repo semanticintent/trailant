@@ -49,6 +49,10 @@ def test_render_cadence_html_includes_valley_note_when_given():
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("TRAILANT_HOME", str(tmp_path / ".trailant"))
+    # reindex() exercises CodexAdapter.read_metadata(), which now consults a
+    # SQLite session index under $CODEX_HOME — isolate it the same way as
+    # test_indexer.py's isolated_home.
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "empty_codex_home"))
     return tmp_path
 
 

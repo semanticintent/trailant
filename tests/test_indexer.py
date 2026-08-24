@@ -10,6 +10,11 @@ from trailant.indexer import INDEX_SCHEMA_VERSION, reindex, trails_path
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("TRAILANT_HOME", str(tmp_path / ".trailant"))
+    # reindex() exercises CodexAdapter.read_metadata(), which now consults a
+    # SQLite session index under $CODEX_HOME — without isolating it here,
+    # tests would silently query the real ~/.codex on whatever machine
+    # runs them (present on this very machine).
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "empty_codex_home"))
     return tmp_path
 
 

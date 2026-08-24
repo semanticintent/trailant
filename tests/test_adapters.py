@@ -1,10 +1,24 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from trailant.adapters.claude_code import ClaudeCodeAdapter
 from trailant.adapters.codex import CodexAdapter
+from tests.fixtures.codex_state_builder import build_state_db, build_state_db_missing_rollout_path_column
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def isolated_codex_home(tmp_path, monkeypatch):
+    """Every test in this file gets an empty, isolated $CODEX_HOME by
+    default — CodexAdapter.read_metadata() now consults a SQLite session
+    index, and without this, tests would silently query the real
+    ~/.codex/state_*.sqlite on whatever machine runs them (present on this
+    very machine). Tests that specifically want a populated state DB
+    override this by setting CODEX_HOME again to a dir they populate."""
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "empty_codex_home"))
 
 
 def test_claude_code_lists_session_file():
@@ -200,6 +214,127 @@ def test_codex_skips_subagent_sessions():
     adapter = CodexAdapter(FIXTURES / "codex_sessions")
     path = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-30-00-11112222.jsonl"
     assert adapter.read_metadata(path) is None
+
+
+# --- Phase 7a: Codex SQLite `threads` table enrichment ---
+
+
+def test_codex_sql_threads_row_overrides_jsonl_metadata(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff",
+        "rollout_path": str(rollout),
+        "created_at": 1755856920,   # 2025-08-22T10:02:00Z
+        "updated_at": 1755857000,
+        "cwd": "/home/me/proj/ingest-from-sql",
+        "title": "AI-generated title from SQL",
+        "first_user_message": "raw first message",
+        "archived": 0,
+        "name": None,
+        "history_mode": "legacy",
+    }])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.ai_title == "AI-generated title from SQL"
+    assert meta.project == "/home/me/proj/ingest-from-sql"
+    assert meta.started_at == "2025-08-22T10:02:00Z"
+    # prompt_count stays JSONL-derived in 7a regardless of history_mode.
+    assert meta.prompt_count == 2
+
+
+def test_codex_sql_name_wins_over_title_wins_over_first_user_message(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff",
+        "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None,
+        "cwd": None,
+        "title": "AI title",
+        "first_user_message": "first message",
+        "archived": 0,
+        "name": "my custom name",
+        "history_mode": "legacy",
+    }])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.ai_title == "my custom name"
+
+
+def test_codex_sql_missing_rollout_path_column_falls_back_cleanly(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    build_state_db_missing_rollout_path_column(codex_home / "state_5.sqlite")
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)  # must not raise
+
+    assert meta is not None
+    assert meta.ai_title == "Fix the retry logic in the ingest job"  # JSONL-derived baseline, untouched
+
+
+def test_codex_sql_prefers_newer_mtime_db_over_lexicographic_sort(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    # "state_10" sorts before "state_5" lexicographically — name them so a
+    # naive string sort would pick the wrong (older) one.
+    older = codex_home / "state_5.sqlite"
+    newer = codex_home / "state_10.sqlite"
+    build_state_db(older, [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff", "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None, "cwd": None,
+        "title": "OLD title", "first_user_message": None,
+        "archived": 0, "name": None, "history_mode": "legacy",
+    }])
+    build_state_db(newer, [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff", "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None, "cwd": None,
+        "title": "NEW title", "first_user_message": None,
+        "archived": 0, "name": None, "history_mode": "legacy",
+    }])
+    import os
+    import time
+    os.utime(older, (time.time() - 100, time.time() - 100))  # deliberately older mtime
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.ai_title == "NEW title"
+
+
+def test_codex_sql_title_is_still_redacted_if_it_looks_like_a_secret(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff", "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None, "cwd": None,
+        "title": "the api_key=sk-abc123 leaked", "first_user_message": None,
+        "archived": 0, "name": None, "history_mode": "legacy",
+    }])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.ai_title == "(untitled — possible secret redacted)"
 
 
 def test_missing_root_returns_empty_list():
