@@ -74,6 +74,60 @@ Implemented and tested (`pytest` passes, CLI smoke-tested against fixture data):
    human confirming first. This is an async mailbox, not a pipe: a note sits in `marks.jsonl` until
    the addressed session is next looked at through trailant, nothing more automatic than that.
 
+## Findings from a second independent Windows validation (against 0.5.1)
+
+Verified where noted below; the rest are plausible and well-evidenced but unverified locally (no
+Windows box to hand). Roughly ordered by value ÷ how confidently it can be fixed without one.
+
+10. **`--html` output drops the secret warning the terminal shows — the most important item here.**
+    Confirmed directly: `render_resume_html` in `html_report.py` never references `secret_hits` at
+    all. A session flagged `🔒 possible secret detected (Nx)` in the terminal shows nothing in the
+    HTML — and HTML is the artifact that actually leaves the machine (emailed, committed, attached
+    to a ticket), the opposite of where a warning like this can afford to go missing. Fix: render
+    the same indicator per session in `render_resume_html`, and add a report-level banner when any
+    included session is flagged. Consider also defaulting `--output`'s target directory to
+    `~/.trailant/reports/` rather than the current working directory, since two generated reports
+    already ended up inside a project directory during this validation.
+11. **Codex SQL-sourced titles skip the truncation the JSONL-fallback path already has.** Found
+    while fixing #10, not reported externally. In `adapters/codex.py`'s SQL-enrichment block,
+    `sql_title` (`name`/`title`/`first_user_message` from the `threads` row) is used as-is, but the
+    JSONL-derived `first_prompt_title` fallback is truncated to 80 chars. Since Codex's own `title`
+    column is frequently just the raw first message (not a real summary), an untruncated SQL title
+    can occupy several terminal/HTML lines. Apply the same truncation to `sql_title` before it
+    becomes the final `ai_title` candidate.
+12. **`resume --print-command` emits a bash-only `cd X && Y`**, which is a parse error on Windows
+    PowerShell 5.1 (`&&`/`||` chaining arrived in PowerShell 7). Fix needs no OS detection: print
+    the `cd`/resume command as two separate lines instead of one chained line — valid in every
+    shell, including POSIX ones, and each line stays independently copy-pasteable.
+13. **Codex-enriched `project`/`cwd` values may carry a Windows extended-length `\\?\` prefix**
+    (e.g. `\\?\C:\Projects`), inherited from `Path.resolve()` in the SQL-lookup fallback and/or
+    however Codex itself wrote the `cwd` column. Same directory can then render two different ways
+    across rows. Strip a leading `\\?\` (and `\\?\UNC\` → `\\`) at the point metadata is read, not
+    at display time, so every consumer (terminal, `--html`, future `--project` filters) sees the
+    normalized form. Unverified locally — no Windows box to confirm the exact prefix shape against.
+14. **`trailant diff`'s snapshot doesn't track per-session state, only session-id-set/counts/marks.**
+    A session that's actively being worked on (more prompts, a title change, an archive flip) but
+    was already known produces no signal at all — `diff` only notices sessions appearing/
+    disappearing and per-source pool-size shifts. Recommended per-session snapshot fields:
+    `ended_at`, `prompt_count`, a hash of `title`/`project` (not the raw text, to avoid duplicating
+    anything `secrets.enabled` would otherwise flag, into a file this tool itself writes) — surfaced
+    as e.g. `1 session resumed`, `3 prompts added`, `1 title updated`.
+15. **`--html` output has no coverage or index-freshness line.** `status`'s terminal output has had
+    one since Phase 3 (`Index: refreshed ... — claude_code: N sessions, ...`); `render_resume_html`/
+    `render_cadence_html` never got the equivalent. Without it, a stale saved report and a genuinely
+    quiet week look identical to whoever's reading the HTML later — the same "unknown vs. zero"
+    problem status already solved, just not carried into this sink.
+16. **`resume`/`today` display fields don't match what they sort/filter by, and can read as
+    confusing rather than wrong.** `resume` sorts by last activity (correct, per Phase 2) but shows
+    each session's *start* timestamp as the primary field — a March session can legitimately outrank
+    an August one and look unsorted until you check `started_at` vs the actual order. `today`'s
+    parenthesized prompt count is the session's *lifetime* total, not prompts specifically from
+    today, which can read as "8,000 prompts happened today" for a long-running resumed session.
+    Recommended labels: `active <date> · started <date>` for `resume`; keep the lifetime count in
+    `today` but caption it explicitly as lifetime rather than implying it's today's count, since a
+    true per-day count isn't available without richer per-turn data than `SessionMeta` currently
+    stores.
+
 ## Running tests
 
 ```bash
