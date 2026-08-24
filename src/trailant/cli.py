@@ -23,6 +23,26 @@ def marks_path():
     return trailant_home() / "marks.jsonl"
 
 
+def _ensure_utf8_streams() -> None:
+    """Best-effort: make stdout/stderr able to encode UTF-8 (the 🐜 mascot,
+    the ⚠ in `cadence`) even where the default console encoding can't —
+    legacy Windows PowerShell 5.1 / certain codepages. Guarded so a
+    redirected/piped/captured/non-reconfigurable stream never turns this
+    into a crash of its own."""
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        encoding = (getattr(stream, "encoding", None) or "").lower().replace("-", "")
+        if encoding == "utf8":
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def _cmd_reindex(args) -> None:
     config = load_config()
     result = reindex(config)
@@ -269,6 +289,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    _ensure_utf8_streams()
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)
