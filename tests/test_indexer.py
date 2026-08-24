@@ -39,6 +39,28 @@ def test_reindex_finds_fixture_sessions(isolated_home):
     assert sources == {"claude_code", "codex"}
     assert len(records) == 7
 
+    assert result.by_source["claude_code"].scanned == 5
+    assert result.by_source["claude_code"].updated == 5
+    assert result.by_source["claude_code"].skipped == 0
+    assert result.by_source["codex"].scanned == 3
+    assert result.by_source["codex"].updated == 2
+    assert result.by_source["codex"].skipped == 1
+
+
+def test_reindex_reports_zero_coverage_for_a_source_that_finds_nothing(isolated_home, tmp_path):
+    fixtures = Path(__file__).parent / "fixtures"
+    empty_codex_root = tmp_path / "no-codex-here"
+    config = _config(fixtures / "claude_code", empty_codex_root)
+
+    result = reindex(config)
+
+    # A configured source with a root that finds nothing still shows up in
+    # by_source with zero counts, rather than being silently absent — this
+    # is what makes an adapter going blind visible at all.
+    assert "codex" in result.by_source
+    assert result.by_source["codex"].scanned == 0
+    assert result.by_source["codex"].updated == 0
+
 
 def test_reindex_is_idempotent_when_files_unchanged(isolated_home):
     fixtures = Path(__file__).parent / "fixtures"

@@ -189,3 +189,33 @@ def test_activity_epoch_handles_trailing_z_suffix():
 def test_activity_epoch_falls_back_to_file_mtime():
     epoch = activity_epoch({"ended_at": None, "file_mtime": 1755856920.0})
     assert epoch == 1755856920.0
+
+
+# --- Phase 3: source coverage reporting ---
+
+
+def test_status_shows_index_coverage_line(isolated_home, capsys):
+    record = _trail_record("s1", source="claude_code",
+                            started_at="2026-08-24T09:00:00Z", ended_at="2026-08-24T09:30:00Z")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_status(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "Index: refreshed" in out
+    assert "claude_code: 1 sessions" in out
+
+
+def test_status_flags_a_configured_source_with_zero_sessions(isolated_home, capsys):
+    record = _trail_record("s1", source="claude_code",
+                            started_at="2026-08-24T09:00:00Z", ended_at="2026-08-24T09:30:00Z")
+    jsonl_store.write_all(trails_path(), [record])
+    # Default config enables both claude_code and codex — codex has no
+    # sessions in this index at all, which should be flagged, not just
+    # silently omitted.
+
+    cli._cmd_status(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "codex: 0 sessions" in out
+    assert "⚠" in out

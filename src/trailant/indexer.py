@@ -8,7 +8,7 @@ moved, no need to re-walk it."
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import jsonl_store
@@ -23,11 +23,26 @@ INDEX_SCHEMA_VERSION = 2
 
 
 @dataclass
+class SourceCoverage:
+    """Per-source counterpart to ReindexResult — lets `reindex` report which
+    source a skipped/unchanged/updated file belonged to, not just an
+    aggregate total. A source that's configured but silently finds nothing
+    (root moved, vendor changed its storage format) is exactly the kind of
+    regression an aggregate-only count would hide."""
+    root: str = ""
+    scanned: int = 0
+    unchanged: int = 0
+    updated: int = 0
+    skipped: int = 0
+
+
+@dataclass
 class ReindexResult:
     scanned: int = 0
     unchanged: int = 0
     updated: int = 0
     skipped: int = 0
+    by_source: dict[str, SourceCoverage] = field(default_factory=dict)
 
 
 def trails_path() -> Path:
@@ -45,13 +60,16 @@ def reindex(config: dict) -> ReindexResult:
         if adapter_cls is None:
             continue
         adapter = adapter_cls(root)
+        cov = result.by_source.setdefault(source_name, SourceCoverage(root=str(root)))
 
         for file in adapter.list_session_files():
             result.scanned += 1
+            cov.scanned += 1
             try:
                 stat = file.stat()
             except OSError:
                 result.skipped += 1
+                cov.skipped += 1
                 continue
 
             key = str(file)
@@ -63,17 +81,20 @@ def reindex(config: dict) -> ReindexResult:
                 and cached.get("_index_schema_version") == INDEX_SCHEMA_VERSION
             ):
                 result.unchanged += 1
+                cov.unchanged += 1
                 continue
 
             meta = adapter.read_metadata(file)
             if meta is None:
                 result.skipped += 1
+                cov.skipped += 1
                 continue
 
             record = meta.to_dict()
             record["_index_schema_version"] = INDEX_SCHEMA_VERSION
             result_records[key] = record
             result.updated += 1
+            cov.updated += 1
 
     jsonl_store.write_all(path, result_records.values())
     return result

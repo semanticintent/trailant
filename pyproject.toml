@@ -1,6 +1,6 @@
 [project]
 name = "trailant"
-version = "0.2.2"
+version = "0.2.3"
 description = "A local-first trail index for AI coding sessions — resume, self-log, and cadence tracking across vendors."
 readme = "README.md"
 requires-python = ">=3.10"

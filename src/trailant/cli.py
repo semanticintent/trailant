@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import jsonl_store
-from .config import load_config, trailant_home
+from .config import enabled_sources, load_config, trailant_home
 from .indexer import reindex, load_trails, trails_path
 from .models import Mark
 from .utils import (
@@ -57,6 +57,10 @@ def _cmd_reindex(args) -> None:
         f"scanned {result.scanned} files — "
         f"{result.updated} updated, {result.unchanged} unchanged, {result.skipped} skipped"
     )
+    for source_name, cov in result.by_source.items():
+        note = "  ⚠ found nothing — check the source path/adapter" if cov.scanned == 0 else ""
+        print(f"  {source_name}: {cov.scanned} files — "
+              f"{cov.updated} updated, {cov.unchanged} unchanged, {cov.skipped} skipped{note}")
     print(f"trails: {trails_path()}")
 
 
@@ -104,6 +108,36 @@ def _cmd_status(args) -> None:
         print(f"  {latest_mark['content'][:120]}")
     else:
         print("\nNo marks logged yet. Try `trailant log \"...\"`.")
+
+    coverage = _index_coverage_line(trails)
+    if coverage:
+        print(f"\n{coverage}")
+
+
+def _index_coverage_line(trails: list[dict]) -> str | None:
+    """One line answering "can I trust this report" — when the index was
+    last refreshed, and per-source counts. A configured source sitting at
+    0 sessions is flagged explicitly rather than just quietly absent —
+    that distinction (unknown/broken vs genuinely zero activity) is what
+    would have made the Codex adapter losing track of current sessions
+    visible immediately instead of requiring a full manual investigation."""
+    path = trails_path()
+    if not path.exists():
+        return None
+    try:
+        refreshed = datetime.fromtimestamp(path.stat().st_mtime)
+    except OSError:
+        return None
+
+    counts = Counter(s.get("source", "unknown") for s in trails)
+    config = load_config()
+    parts = []
+    for source_name in enabled_sources(config):
+        n = counts.get(source_name, 0)
+        flag = " ⚠ zero sessions — check source path/adapter" if n == 0 else ""
+        parts.append(f"{source_name}: {n} sessions{flag}")
+    sources_note = ", ".join(parts) if parts else "no sources configured"
+    return f"Index: refreshed {refreshed.strftime('%Y-%m-%d %H:%M')} — {sources_note}"
 
 
 def _cmd_log(args) -> None:
