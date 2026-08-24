@@ -19,7 +19,7 @@ from .config import enabled_sources, trailant_home
 # force re-parsing of already-indexed, unchanged files — otherwise the
 # mtime/size cache below would keep serving stale metadata (e.g. an old
 # title) forever, since nothing about the source file itself changed.
-INDEX_SCHEMA_VERSION = 3
+INDEX_SCHEMA_VERSION = 4
 
 
 @dataclass
@@ -54,6 +54,7 @@ def reindex(config: dict) -> ReindexResult:
     existing = {r["file_path"]: r for r in jsonl_store.read_all(path)}
     result_records = dict(existing)
     result = ReindexResult()
+    scan_for_secrets = config.get("secrets", {}).get("enabled", True)
 
     for source_name, root in enabled_sources(config).items():
         adapter_cls = ADAPTERS.get(source_name)
@@ -84,7 +85,7 @@ def reindex(config: dict) -> ReindexResult:
                 cov.unchanged += 1
                 continue
 
-            meta = adapter.read_metadata(file)
+            meta = adapter.read_metadata(file, scan_for_secrets=scan_for_secrets)
             if meta is None:
                 result.skipped += 1
                 cov.skipped += 1

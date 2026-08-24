@@ -1,4 +1,4 @@
-from trailant.utils import is_system_wrapper_text
+from trailant.utils import is_system_wrapper_text, looks_like_secret
 
 
 def test_known_wrapper_tag_is_detected():
@@ -36,3 +36,37 @@ def test_ide_opened_file_tag_is_detected():
     # Found via a benchmark against real data: a 209MB session's title
     # surfaced as this wrapper instead of a real prompt.
     assert is_system_wrapper_text("<ide_opened_file>The user opened the file /a/b.py</ide_opened_file>") is True
+
+
+def test_looks_like_secret_detects_password_assignment():
+    assert looks_like_secret("the prod db password=hunter2 stopped working") is True
+
+
+def test_looks_like_secret_detects_api_key():
+    assert looks_like_secret("set STRIPE_API_KEY=sk_live_abc123") is True
+
+
+def test_looks_like_secret_detects_bearer_token():
+    assert looks_like_secret("curl -H 'Authorization: Bearer abcdef0123456789'") is True
+
+
+def test_looks_like_secret_detects_aws_access_key():
+    assert looks_like_secret("AKIAABCDEFGHIJKLMNOP leaked in the log") is True
+
+
+def test_looks_like_secret_detects_private_key_header():
+    assert looks_like_secret("-----BEGIN RSA PRIVATE KEY-----") is True
+
+
+def test_looks_like_secret_ignores_ordinary_text():
+    assert looks_like_secret("fix the retry logic in the ingest job") is False
+
+
+def test_looks_like_secret_ignores_the_word_secret_alone():
+    # "secret" mentioned without an assignment shouldn't fire — avoid
+    # alarm fatigue on ordinary conversation about secrets management.
+    assert looks_like_secret("we should rotate our secrets more often") is False
+
+
+def test_looks_like_secret_handles_empty_text():
+    assert looks_like_secret("") is False

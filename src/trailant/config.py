@@ -33,6 +33,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "baseline_window_weeks": 12,
         "valley_flag_after_weeks": 8,
     },
+    "secrets": {
+        # Best-effort scan for probable credentials in transcripts (see
+        # utils.looks_like_secret) — flags the session, redacts the title
+        # if it matched, never stores or displays the match itself.
+        # Disable for zero scanning overhead / to opt out entirely.
+        "enabled": True,
+    },
 }
 
 

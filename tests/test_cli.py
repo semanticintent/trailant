@@ -252,6 +252,44 @@ def test_resume_print_command_skips_unknown_source(isolated_home, capsys):
     assert "resume:" not in out  # no crash, no guessed command
 
 
+# --- Phase 6: secret-leak detection ---
+
+
+def test_resume_flags_a_session_with_secret_hits(isolated_home, capsys):
+    record = _trail_record("s1", ai_title="(untitled — possible secret redacted)")
+    record["secret_hits"] = 2
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None, print_command=False))
+    out = capsys.readouterr().out
+
+    assert "possible secret detected (2x)" in out
+
+
+def test_status_flags_the_latest_session_with_secret_hits(isolated_home, capsys):
+    record = _trail_record("s1", ai_title="(untitled — possible secret redacted)",
+                            started_at="2026-08-24T09:00:00Z", ended_at="2026-08-24T09:30:00Z")
+    record["secret_hits"] = 1
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_status(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "possible secret detected (1x)" in out
+
+
+def test_status_coverage_line_notes_aggregate_secret_count(isolated_home, capsys):
+    clean = _trail_record("s1", ai_title="fine")
+    flagged = _trail_record("s2", ai_title="(untitled — possible secret redacted)")
+    flagged["secret_hits"] = 3
+    jsonl_store.write_all(trails_path(), [clean, flagged])
+
+    cli._cmd_status(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "1 session(s) contain probable secrets" in out
+
+
 # --- Phase 4: `trailant diff` ("what changed since last run") ---
 
 

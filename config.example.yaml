@@ -27,3 +27,11 @@ self_log:
 cadence:
   baseline_window_weeks: 12
   valley_flag_after_weeks: 8
+
+secrets:
+  # Best-effort scan for probable credentials (password=, api_key, bearer
+  # tokens, AWS keys, private-key headers) while indexing. Flags the
+  # session and redacts the title if it matched — never stores or
+  # displays the matched text itself. Set false for zero scanning
+  # overhead / to opt out entirely.
+  enabled: true

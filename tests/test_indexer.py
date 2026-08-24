@@ -27,20 +27,20 @@ def test_reindex_finds_fixture_sessions(isolated_home):
     config = _config(fixtures / "claude_code", fixtures / "codex_sessions")
 
     result = reindex(config)
-    # 5 claude_code sessions + 3 codex rollout files (one of which is a
+    # 6 claude_code sessions + 3 codex rollout files (one of which is a
     # subagent session that read_metadata correctly skips).
-    assert result.scanned == 8
-    assert result.updated == 7
+    assert result.scanned == 9
+    assert result.updated == 8
     assert result.skipped == 1
     assert result.unchanged == 0
 
     records = jsonl_store.read_all(trails_path())
     sources = {r["source"] for r in records}
     assert sources == {"claude_code", "codex"}
-    assert len(records) == 7
+    assert len(records) == 8
 
-    assert result.by_source["claude_code"].scanned == 5
-    assert result.by_source["claude_code"].updated == 5
+    assert result.by_source["claude_code"].scanned == 6
+    assert result.by_source["claude_code"].updated == 6
     assert result.by_source["claude_code"].skipped == 0
     assert result.by_source["codex"].scanned == 3
     assert result.by_source["codex"].updated == 2
@@ -70,7 +70,7 @@ def test_reindex_is_idempotent_when_files_unchanged(isolated_home):
     second = reindex(config)
 
     assert second.updated == 0
-    assert second.unchanged == 7
+    assert second.unchanged == 8
     assert second.skipped == 1
 
 
@@ -87,6 +87,19 @@ def test_reindex_reparses_when_schema_version_is_stale(isolated_home):
 
     second = reindex(config)
 
-    assert second.updated == 7
+    assert second.updated == 8
     assert second.unchanged == 0
     assert second.skipped == 1
+
+
+def test_reindex_respects_secrets_disabled_config(isolated_home):
+    fixtures = Path(__file__).parent / "fixtures"
+    config = _config(fixtures / "claude_code", fixtures / "codex_sessions")
+    config["secrets"] = {"enabled": False}
+
+    reindex(config)
+    records = jsonl_store.read_all(trails_path())
+
+    secret_record = next(r for r in records if r["session_id"] == "f6a7b8c9-1111-2222-3333-444455556666")
+    assert secret_record["secret_hits"] == 0
+    assert "password" in secret_record["ai_title"]  # not redacted when scanning is off

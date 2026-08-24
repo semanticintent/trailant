@@ -48,6 +48,30 @@ def is_system_wrapper_text(text: str) -> bool:
     return stripped.startswith(SYSTEM_WRAPPER_PREFIXES)
 
 
+# Small, high-confidence pattern set — false negatives are fine (better to
+# miss than to alarm-fatigue on every "secret" mentioned in passing); false
+# positives should be rare. Never used to extract or log the matched text
+# itself, only to flag that a line probably contains one.
+_SECRET_PATTERNS = [
+    re.compile(r"password\s*[:=]\s*\S+", re.IGNORECASE),
+    re.compile(r"api[_-]?key\s*[:=]\s*\S+", re.IGNORECASE),
+    re.compile(r"client[_-]?secret\s*[:=]\s*\S+", re.IGNORECASE),
+    re.compile(r"\bbearer\s+[A-Za-z0-9\-_.]{10,}", re.IGNORECASE),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key id — essentially zero false positives
+]
+
+
+def looks_like_secret(text: str) -> bool:
+    """Best-effort check for a probable credential in `text` — a session
+    title, or a raw transcript line. Returns only a bool, never the match
+    itself, so callers can flag/redact without ever persisting the secret
+    material anywhere trailant writes to."""
+    if not text:
+        return False
+    return any(p.search(text) for p in _SECRET_PATTERNS)
+
+
 def best_effort_date(session: dict) -> str:
     """Return a YYYY-MM-DD string for a trail record, preferring started_at,
     falling back to file_mtime. Sessions are noisy — timestamps aren't always

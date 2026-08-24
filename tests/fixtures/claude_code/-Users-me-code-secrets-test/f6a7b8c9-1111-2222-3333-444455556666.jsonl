@@ -1,0 +1,2 @@
+{"type":"user","sessionId":"f6a7b8c9-1111-2222-3333-444455556666","uuid":"44440001","parentUuid":null,"timestamp":"2026-08-24T14:00:00Z","message":{"role":"user","content":"the prod db password=hunter2 stopped working, can you check the connection string?"}}
+{"type":"assistant","sessionId":"f6a7b8c9-1111-2222-3333-444455556666","uuid":"44440002","parentUuid":"44440001","timestamp":"2026-08-24T14:05:00Z","message":{"role":"assistant","content":"Let me check the connection."}}

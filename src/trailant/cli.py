@@ -188,6 +188,9 @@ def _cmd_resume(args) -> None:
         print(f"              project: {s.get('project')}")
         print(f"              session: {s['session_id']}  "
               f"prompts={s.get('prompt_count', 0)}  size={human_size(s.get('size_bytes', 0))}")
+        if s.get("secret_hits"):
+            print(f"              \U0001F512 possible secret detected ({s['secret_hits']}x) "
+                  f"— review before sharing")
         if args.print_command:
             template = RESUME_COMMANDS.get(s.get("source"))
             if template:
@@ -206,6 +209,9 @@ def _cmd_status(args) -> None:
         print(f"  project: {latest.get('project')}")
         print(f"  started: {latest.get('started_at')}")
         print(f"  last activity: {latest.get('ended_at') or '?'}")
+        if latest.get("secret_hits"):
+            print(f"  \U0001F512 possible secret detected ({latest['secret_hits']}x) "
+                  f"— review before sharing")
     else:
         print("No sessions indexed yet. Run `trailant reindex`.")
 
@@ -244,7 +250,12 @@ def _index_coverage_line(trails: list[dict]) -> str | None:
         flag = " ⚠ zero sessions — check source path/adapter" if n == 0 else ""
         parts.append(f"{source_name}: {n} sessions{flag}")
     sources_note = ", ".join(parts) if parts else "no sources configured"
-    return f"Index: refreshed {refreshed.strftime('%Y-%m-%d %H:%M')} — {sources_note}"
+    line = f"Index: refreshed {refreshed.strftime('%Y-%m-%d %H:%M')} — {sources_note}"
+
+    secret_count = sum(1 for s in trails if s.get("secret_hits"))
+    if secret_count:
+        line += f"\n\U0001F512 {secret_count} session(s) contain probable secrets — see `trailant resume`"
+    return line
 
 
 def _cmd_log(args) -> None:

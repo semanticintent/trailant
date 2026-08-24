@@ -22,6 +22,7 @@ class SessionMeta:
     file_path: str
     file_mtime: float
     ai_title: Optional[str] = None
+    secret_hits: int = 0        # count of lines that looked like they held a credential
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

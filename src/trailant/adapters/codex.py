@@ -35,7 +35,7 @@ from typing import Optional
 
 from .base import SourceAdapter
 from ..models import SessionMeta
-from ..utils import is_system_wrapper_text
+from ..utils import is_system_wrapper_text, looks_like_secret
 
 
 class CodexAdapter(SourceAdapter):
@@ -46,7 +46,7 @@ class CodexAdapter(SourceAdapter):
             return []
         return sorted(self.root.rglob("rollout-*.jsonl"))
 
-    def read_metadata(self, path: Path) -> Optional[SessionMeta]:
+    def read_metadata(self, path: Path, *, scan_for_secrets: bool = True) -> Optional[SessionMeta]:
         if path.suffix == ".zst":
             return None  # compressed — see module docstring
 
@@ -61,6 +61,7 @@ class CodexAdapter(SourceAdapter):
         first_user_text: Optional[str] = None
         first_ts: Optional[str] = None
         last_ts: Optional[str] = None
+        secret_hits = 0
 
         try:
             with path.open(encoding="utf-8", errors="replace") as f:
@@ -68,6 +69,8 @@ class CodexAdapter(SourceAdapter):
                     line = line.strip()
                     if not line:
                         continue
+                    if scan_for_secrets and looks_like_secret(line):
+                        secret_hits += 1
                     try:
                         record = json.loads(line)
                     except json.JSONDecodeError:
@@ -110,6 +113,8 @@ class CodexAdapter(SourceAdapter):
             (first_user_text[:80] + "...") if first_user_text and len(first_user_text) > 80
             else first_user_text
         )
+        if ai_title and scan_for_secrets and looks_like_secret(ai_title):
+            ai_title = "(untitled — possible secret redacted)"
 
         return SessionMeta(
             session_id=session_id,
@@ -122,4 +127,5 @@ class CodexAdapter(SourceAdapter):
             file_path=str(path),
             file_mtime=stat.st_mtime,
             ai_title=ai_title,
+            secret_hits=secret_hits,
         )

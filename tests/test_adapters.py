@@ -17,6 +17,7 @@ def test_claude_code_lists_session_file():
         "a1b2c3d4-1111-2222-3333-444455556666.jsonl",
         "b2c3d4e5-1111-2222-3333-444455556666.jsonl",
         "c3d4e5f6-1111-2222-3333-444455556666.jsonl",
+        "f6a7b8c9-1111-2222-3333-444455556666.jsonl",
     }
 
 
@@ -135,6 +136,28 @@ def test_claude_code_malformed_sessions_file_does_not_break_indexing(tmp_path):
 
     assert meta is not None
     assert meta.ai_title == "hello"  # falls through cleanly to the first prompt
+
+
+def test_claude_code_flags_and_redacts_a_probable_secret_in_the_title():
+    adapter = ClaudeCodeAdapter(FIXTURES / "claude_code")
+    path = FIXTURES / "claude_code" / "-Users-me-code-secrets-test" / "f6a7b8c9-1111-2222-3333-444455556666.jsonl"
+    meta = adapter.read_metadata(path)
+
+    assert meta is not None
+    assert meta.secret_hits >= 1
+    # Redacted at the source — the raw password never surfaces as a title.
+    assert meta.ai_title == "(untitled — possible secret redacted)"
+    assert "hunter2" not in (meta.ai_title or "")
+
+
+def test_claude_code_secret_scan_disableable():
+    adapter = ClaudeCodeAdapter(FIXTURES / "claude_code")
+    path = FIXTURES / "claude_code" / "-Users-me-code-secrets-test" / "f6a7b8c9-1111-2222-3333-444455556666.jsonl"
+    meta = adapter.read_metadata(path, scan_for_secrets=False)
+
+    assert meta is not None
+    assert meta.secret_hits == 0
+    assert "password" in (meta.ai_title or "")  # not redacted when scanning is off
 
 
 def test_codex_lists_session_file():

@@ -36,7 +36,7 @@ from typing import Optional
 
 from .base import SourceAdapter
 from ..models import SessionMeta
-from ..utils import is_system_wrapper_text
+from ..utils import is_system_wrapper_text, looks_like_secret
 
 
 class ClaudeCodeAdapter(SourceAdapter):
@@ -100,7 +100,7 @@ class ClaudeCodeAdapter(SourceAdapter):
             return "/" + project_dir_name[1:].replace("-", "/")
         return project_dir_name.replace("-", "/")
 
-    def read_metadata(self, path: Path) -> Optional[SessionMeta]:
+    def read_metadata(self, path: Path, *, scan_for_secrets: bool = True) -> Optional[SessionMeta]:
         try:
             stat = path.stat()
         except OSError:
@@ -116,6 +116,7 @@ class ClaudeCodeAdapter(SourceAdapter):
         summary_title: Optional[str] = None
         ai_title_record: Optional[str] = None
         cwd_from_record: Optional[str] = None
+        secret_hits = 0
 
         try:
             with path.open(encoding="utf-8", errors="replace") as f:
@@ -123,6 +124,8 @@ class ClaudeCodeAdapter(SourceAdapter):
                     line = line.strip()
                     if not line:
                         continue
+                    if scan_for_secrets and looks_like_secret(line):
+                        secret_hits += 1
                     try:
                         record = json.loads(line)
                     except json.JSONDecodeError:
@@ -174,6 +177,11 @@ class ClaudeCodeAdapter(SourceAdapter):
         )
         user_name = self._get_session_names().get(session_id)
         ai_title = user_name or ai_title_record or summary_title or first_prompt_title
+        if ai_title and scan_for_secrets and looks_like_secret(ai_title):
+            # Redact at the source: ai_title flows into resume/status/--html/
+            # diff unchanged, so fixing it here protects every consumer at
+            # once instead of needing separate redaction logic downstream.
+            ai_title = "(untitled — possible secret redacted)"
 
         return SessionMeta(
             session_id=session_id,
@@ -186,4 +194,5 @@ class ClaudeCodeAdapter(SourceAdapter):
             file_path=str(path),
             file_mtime=stat.st_mtime,
             ai_title=ai_title,
+            secret_hits=secret_hits,
         )

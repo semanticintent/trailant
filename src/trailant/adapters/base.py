@@ -23,10 +23,16 @@ class SourceAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def read_metadata(self, path: Path) -> Optional[SessionMeta]:
+    def read_metadata(self, path: Path, *, scan_for_secrets: bool = True) -> Optional[SessionMeta]:
         """Read the minimum bytes needed to produce a SessionMeta.
         Return None (rather than raising) for files that can't be parsed —
-        callers should skip and warn, not crash the whole reindex."""
+        callers should skip and warn, not crash the whole reindex.
+
+        scan_for_secrets: best-effort credential-pattern check on each line
+        (see utils.looks_like_secret) — set False to skip it entirely
+        (config's secrets.enabled). When it fires on the chosen ai_title
+        itself, the adapter redacts the title in place rather than ever
+        surfacing the matched text."""
         raise NotImplementedError
 
     def read_full_text(self, path: Path) -> str:
