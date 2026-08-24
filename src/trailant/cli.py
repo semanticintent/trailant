@@ -7,9 +7,10 @@ _cmd_* function per subcommand so each is easy to read, test, and extend.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import jsonl_store
@@ -62,6 +63,96 @@ def _cmd_reindex(args) -> None:
         print(f"  {source_name}: {cov.scanned} files — "
               f"{cov.updated} updated, {cov.unchanged} unchanged, {cov.skipped} skipped{note}")
     print(f"trails: {trails_path()}")
+
+
+def _diff_snapshot_path() -> Path:
+    return trailant_home() / "diff_snapshot.json"
+
+
+def _capture_diff_snapshot(trails: list[dict], marks: list[dict]) -> dict:
+    return {
+        "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "session_ids": sorted(s["session_id"] for s in trails if s.get("session_id")),
+        "by_source": dict(Counter(s.get("source", "unknown") for s in trails)),
+        "mark_count": len(marks),
+    }
+
+
+def _write_diff_snapshot(snapshot: dict) -> None:
+    path = _diff_snapshot_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+
+
+def _cmd_diff(args) -> None:
+    """"What changed since last run" — the mechanism that would have made
+    an adapter going silent (validation issue #1) visible on its own,
+    instead of requiring a full manual investigation to notice. Compares
+    the index's current reduced state against a snapshot captured the last
+    time `diff` ran, then updates the snapshot for next time."""
+    trails = load_trails()
+    marks = jsonl_store.read_all(marks_path())
+    current = _capture_diff_snapshot(trails, marks)
+
+    snapshot_path = _diff_snapshot_path()
+    previous = None
+    if snapshot_path.exists():
+        try:
+            previous = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            previous = None
+
+    if previous is None:
+        _write_diff_snapshot(current)
+        print("No previous snapshot — this is your baseline.")
+        print(f"Indexed {len(trails)} sessions across {len(current['by_source'])} source(s), "
+              f"{len(marks)} mark(s).")
+        print("Run `trailant diff` again later to see what changed.")
+        return
+
+    print(f"Changed since {previous.get('captured_at', '?')}")
+    print("──────────────────────")
+    changed = False
+
+    prev_ids = set(previous.get("session_ids", []))
+    curr_ids = set(current["session_ids"])
+    new_ids = curr_ids - prev_ids
+    if new_ids:
+        changed = True
+        by_id = {s["session_id"]: s for s in trails}
+        ordered = sorted(new_ids, key=lambda sid: activity_epoch(by_id[sid]), reverse=True)
+        print(f"  {len(new_ids)} new session(s):")
+        for sid in ordered[:10]:
+            s = by_id[sid]
+            print(f"    [{s.get('source')}] {s.get('ai_title') or '(untitled)'}  ({s.get('project')})")
+        if len(ordered) > 10:
+            print(f"    ... and {len(ordered) - 10} more")
+
+    prev_pool, curr_pool = len(prev_ids), len(curr_ids)
+    if curr_pool != prev_pool:
+        changed = True
+        print(f"  pool size {prev_pool} -> {curr_pool}")
+
+    prev_by_source = previous.get("by_source", {})
+    curr_by_source = current["by_source"]
+    for src in sorted(set(prev_by_source) | set(curr_by_source)):
+        before, after = prev_by_source.get(src, 0), curr_by_source.get(src, 0)
+        if before > 0 and after == 0:
+            changed = True
+            print(f"  !! SOURCE DRIFTED: {src} — went from {before} session(s) to 0")
+        elif src not in prev_by_source and after > 0:
+            changed = True
+            print(f"  new source active: {src} ({after} session(s))")
+
+    mark_delta = current["mark_count"] - previous.get("mark_count", 0)
+    if mark_delta > 0:
+        changed = True
+        print(f"  {mark_delta} new mark(s) logged")
+
+    if not changed:
+        print("  (nothing changed)")
+
+    _write_diff_snapshot(current)
 
 
 def _cmd_resume(args) -> None:
@@ -297,6 +388,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("reindex", help="Rebuild the trail index from all configured sources.")
     p.set_defaults(func=_cmd_reindex)
+
+    p = sub.add_parser("diff", help="Show what changed in the index since the last `trailant diff` run.")
+    p.set_defaults(func=_cmd_diff)
 
     p = sub.add_parser("resume", help="List recent sessions across all vendors.")
     p.add_argument("--limit", type=int, default=15)

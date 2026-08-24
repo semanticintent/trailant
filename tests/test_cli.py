@@ -219,3 +219,91 @@ def test_status_flags_a_configured_source_with_zero_sessions(isolated_home, caps
 
     assert "codex: 0 sessions" in out
     assert "⚠" in out
+
+
+# --- Phase 4: `trailant diff` ("what changed since last run") ---
+
+
+def test_diff_first_run_captures_baseline_without_claiming_a_change(isolated_home, capsys):
+    record = _trail_record("s1", ai_title="First ever session")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_diff(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "No previous snapshot" in out
+    assert "baseline" in out
+    assert cli._diff_snapshot_path().exists()
+
+
+def test_diff_reports_nothing_changed_on_second_run_with_no_changes(isolated_home, capsys):
+    record = _trail_record("s1", ai_title="Stable session")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_diff(argparse.Namespace())
+    capsys.readouterr()  # discard baseline output
+    cli._cmd_diff(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "(nothing changed)" in out
+    assert "new session" not in out
+
+
+def test_diff_reports_new_sessions_since_last_run(isolated_home, capsys):
+    old = _trail_record("s1", ai_title="Already known")
+    jsonl_store.write_all(trails_path(), [old])
+    cli._cmd_diff(argparse.Namespace())
+    capsys.readouterr()
+
+    new = _trail_record("s2", ai_title="Brand new session")
+    jsonl_store.write_all(trails_path(), [old, new])
+    cli._cmd_diff(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "1 new session(s)" in out
+    assert "Brand new session" in out
+    assert "Already known" not in out
+    assert "pool size 1 -> 2" in out
+
+
+def test_diff_flags_a_source_that_went_from_active_to_zero(isolated_home, capsys):
+    a = _trail_record("s1", source="claude_code", ai_title="a")
+    b = _trail_record("s2", source="codex", ai_title="b")
+    jsonl_store.write_all(trails_path(), [a, b])
+    cli._cmd_diff(argparse.Namespace())
+    capsys.readouterr()
+
+    # codex's only session vanished from the index — simulates an adapter
+    # silently losing track of a source between runs.
+    jsonl_store.write_all(trails_path(), [a])
+    cli._cmd_diff(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "SOURCE DRIFTED" in out
+    assert "codex" in out
+
+
+def test_diff_reports_new_marks_since_last_run(isolated_home, capsys):
+    record = _trail_record("s1")
+    jsonl_store.write_all(trails_path(), [record])
+    cli._cmd_diff(argparse.Namespace())
+    capsys.readouterr()
+
+    cli._cmd_log(argparse.Namespace(note="a new note"))
+    capsys.readouterr()
+    cli._cmd_diff(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "1 new mark(s) logged" in out
+
+
+def test_diff_recovers_from_a_corrupt_snapshot_file(isolated_home, capsys):
+    record = _trail_record("s1")
+    jsonl_store.write_all(trails_path(), [record])
+    cli._diff_snapshot_path().parent.mkdir(parents=True, exist_ok=True)
+    cli._diff_snapshot_path().write_text("not valid json{{{", encoding="utf-8")
+
+    cli._cmd_diff(argparse.Namespace())  # must not raise
+    out = capsys.readouterr().out
+
+    assert "No previous snapshot" in out

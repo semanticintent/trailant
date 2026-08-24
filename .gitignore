@@ -18,4 +18,5 @@ index.db
 .trailant/
 /trails.jsonl
 /marks.jsonl
+/diff_snapshot.json
 /logs/
