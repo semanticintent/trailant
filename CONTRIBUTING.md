@@ -64,6 +64,15 @@ Implemented and tested (`pytest` passes, CLI smoke-tested against fixture data):
    message). There's no day-level narrative rollup ("today you mostly worked on X, with a detour
    into Y") — just a per-session listing. Building one would be a new, optional step layered on top
    of `today`/`week`'s existing output, not a change to how `reindex` extracts `ai_title`.
+9. **No way to leave a note addressed to a specific session.** `trailant log`/`close` already
+   write marks, but nothing routes one *to* a particular session for its next resumption to see.
+   The natural shape: extend `Mark` with an optional `to_session_id` field, and have `resume`/
+   `status` surface any addressed-but-unread marks for a session when it comes up. Deliberately
+   **not** live cross-session or cross-agent messaging — that's a different category of system
+   (active coordination, not passive reconstruction) and arguably belongs to something like TRACE/
+   OCTO rather than trailant, which never writes to vendor data and never sends anything without a
+   human confirming first. This is an async mailbox, not a pipe: a note sits in `marks.jsonl` until
+   the addressed session is next looked at through trailant, nothing more automatic than that.
 
 ## Running tests
 
