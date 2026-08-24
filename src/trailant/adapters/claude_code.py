@@ -65,7 +65,13 @@ class ClaudeCodeAdapter(SourceAdapter):
         """Best-effort scan of ~/.claude/sessions/*.json for user-set
         session display names (Claude Code's -n/--name, or the picker's
         rename). Vendor-internal, no stability contract — any failure here
-        must degrade to "no names found", never break indexing."""
+        must degrade to "no names found", never break indexing.
+
+        Excludes nameSource == "derived": confirmed live against real
+        session files that these are Claude Code's own auto-generated
+        fallback slugs (e.g. "workspace-a7"), not something the user chose
+        — letting them win would rank a weak auto-slug above a real
+        ai-title record, the opposite of the intended precedence."""
         names: dict[str, str] = {}
         sessions_dir = self.root.parent / "sessions"
         if not sessions_dir.exists():
@@ -82,7 +88,7 @@ class ClaudeCodeAdapter(SourceAdapter):
             if not isinstance(data, dict):
                 continue
             session_id, name = data.get("sessionId"), data.get("name")
-            if session_id and isinstance(name, str) and name:
+            if session_id and isinstance(name, str) and name and data.get("nameSource") != "derived":
                 names[session_id] = name  # sorted by mtime — most-recent file wins on collision
         return names
 

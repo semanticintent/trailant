@@ -1,9 +1,13 @@
+import argparse
 import io
 import sys
+from datetime import datetime
 
 import pytest
 
-from trailant import cli
+from trailant import cli, jsonl_store
+from trailant.indexer import trails_path
+from trailant.utils import activity_epoch, recent_iso_weeks
 
 
 def _cp1252_stdout() -> io.TextIOWrapper:
@@ -51,3 +55,137 @@ def test_ensure_utf8_streams_skips_stream_without_reconfigure(monkeypatch):
     monkeypatch.setattr(sys, "stdout", _NoReconfigureStream())
     monkeypatch.setattr(sys, "stderr", _NoReconfigureStream())
     cli._ensure_utf8_streams()  # must not raise
+
+
+# --- Phase 2: reporting honesty (activity-based, not session-start-based) ---
+
+
+@pytest.fixture
+def isolated_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRAILANT_HOME", str(tmp_path / ".trailant"))
+    return tmp_path
+
+
+def _trail_record(session_id, *, source="claude_code", project="/x",
+                   started_at=None, ended_at=None, file_mtime=0.0,
+                   ai_title="untitled", prompt_count=1, size_bytes=100):
+    return {
+        "session_id": session_id,
+        "source": source,
+        "project": project,
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "prompt_count": prompt_count,
+        "size_bytes": size_bytes,
+        "file_path": f"/fake/{session_id}.jsonl",
+        "file_mtime": file_mtime,
+        "ai_title": ai_title,
+    }
+
+
+def test_status_picks_by_activity_not_started_at(isolated_home, capsys):
+    old_start_recent_activity = _trail_record(
+        "s1", started_at="2026-08-01T09:00:00Z", ended_at="2026-08-24T10:00:00Z",
+        ai_title="Old start, active today")
+    recent_start_stale = _trail_record(
+        "s2", started_at="2026-08-23T09:00:00Z", ended_at="2026-08-23T09:30:00Z",
+        ai_title="Recent start, stale")
+    jsonl_store.write_all(trails_path(), [old_start_recent_activity, recent_start_stale])
+
+    cli._cmd_status(argparse.Namespace())
+    out = capsys.readouterr().out
+
+    assert "Old start, active today" in out
+    assert "Recent start, stale" not in out
+
+
+def test_resume_sorts_by_activity_not_started_at(isolated_home, capsys):
+    should_be_first = _trail_record(
+        "s1", started_at="2026-08-01T09:00:00Z", ended_at="2026-08-24T10:00:00Z",
+        ai_title="Should be first")
+    should_be_second = _trail_record(
+        "s2", started_at="2026-08-23T09:00:00Z", ended_at="2026-08-23T09:30:00Z",
+        ai_title="Should be second")
+    # Written deliberately out of activity order.
+    jsonl_store.write_all(trails_path(), [should_be_second, should_be_first])
+
+    cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None))
+    out = capsys.readouterr().out
+
+    assert out.index("Should be first") < out.index("Should be second")
+
+
+def test_close_default_picks_by_activity_not_started_at(isolated_home, capsys, monkeypatch):
+    should_be_closed = _trail_record(
+        "s1", started_at="2026-08-01T09:00:00Z", ended_at="2026-08-24T10:00:00Z",
+        ai_title="Should be closed")
+    not_this_one = _trail_record(
+        "s2", started_at="2026-08-23T09:00:00Z", ended_at="2026-08-23T09:30:00Z",
+        ai_title="Not this one")
+    jsonl_store.write_all(trails_path(), [should_be_closed, not_this_one])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "n")
+
+    cli._cmd_close(argparse.Namespace(session_id=None))
+    out = capsys.readouterr().out
+
+    assert "Should be closed" in out
+    assert "Not this one" not in out
+
+
+def test_today_includes_resumed_old_session(isolated_home, capsys):
+    now = datetime(2026, 8, 24, 15, 0, 0)
+    record = _trail_record(
+        "s1", started_at="2026-08-21T09:00:00Z", ended_at="2026-08-24T14:00:00Z",
+        ai_title="Resumed today")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_today(argparse.Namespace(), now=now)
+    out = capsys.readouterr().out
+
+    assert "Resumed today" in out
+
+
+def test_week_does_not_flag_future_days_as_gaps(isolated_home, capsys):
+    now = datetime(2026, 8, 24, 12, 0, 0)  # a Monday, per the validation report
+
+    cli._cmd_week(argparse.Namespace(), now=now)
+    out = capsys.readouterr().out
+
+    # Today, with no activity yet, is still a legitimate gap.
+    assert "2026-08-24 (gap day" in out
+    # But the rest of this week hasn't happened yet — no gap claim for it.
+    for future_day in ("2026-08-25", "2026-08-26", "2026-08-27",
+                        "2026-08-28", "2026-08-29", "2026-08-30"):
+        assert f"{future_day} (gap day" not in out
+
+
+def test_cadence_zero_fills_contiguous_weeks_and_counts_current_week(isolated_home, capsys):
+    now = datetime(2026, 8, 24, 12, 0, 0)
+    record = _trail_record(
+        "s1", started_at="2026-07-01T09:00:00Z", ended_at="2026-08-24T10:00:00Z",
+        ai_title="resumed this week")
+    jsonl_store.write_all(trails_path(), [record])
+
+    cli._cmd_cadence(argparse.Namespace(html=False, output=None), now=now)
+    out = capsys.readouterr().out
+
+    weeks = recent_iso_weeks(12, today=now)
+    assert len(weeks) == 12
+    # Contiguous + zero-filled: every week label appears, including the
+    # ones with no sessions at all.
+    for w in weeks:
+        assert w in out
+    # The session's ended_at (this week) counts it toward the *current*
+    # week, not the week it started in.
+    current_week = weeks[-1]
+    assert f"  {current_week}: {1:3d}  #" in out
+
+
+def test_activity_epoch_handles_trailing_z_suffix():
+    epoch = activity_epoch({"ended_at": "2026-08-22T11:02:00Z"})
+    assert epoch > 0
+
+
+def test_activity_epoch_falls_back_to_file_mtime():
+    epoch = activity_epoch({"ended_at": None, "file_mtime": 1755856920.0})
+    assert epoch == 1755856920.0

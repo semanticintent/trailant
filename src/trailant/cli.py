@@ -16,7 +16,14 @@ from . import jsonl_store
 from .config import load_config, trailant_home
 from .indexer import reindex, load_trails, trails_path
 from .models import Mark
-from .utils import best_effort_date, human_size, today_str, iso_week
+from .utils import (
+    activity_epoch,
+    best_effort_activity_date,
+    human_size,
+    iso_week,
+    recent_iso_weeks,
+    today_str,
+)
 
 
 def marks_path():
@@ -58,7 +65,7 @@ def _cmd_resume(args) -> None:
     if not trails:
         print("No sessions indexed yet. Run `trailant reindex` first.")
         return
-    trails.sort(key=lambda s: s.get("started_at") or "", reverse=True)
+    trails.sort(key=activity_epoch, reverse=True)
     limit = args.limit or 15
     shown = trails[:limit]
 
@@ -83,10 +90,11 @@ def _cmd_status(args) -> None:
     marks = jsonl_store.read_all(marks_path())
 
     if trails:
-        latest = max(trails, key=lambda s: s.get("started_at") or "")
+        latest = max(trails, key=activity_epoch)
         print(f"Last session: [{latest['source']}] {latest.get('ai_title') or '(untitled)'}")
         print(f"  project: {latest.get('project')}")
         print(f"  started: {latest.get('started_at')}")
+        print(f"  last activity: {latest.get('ended_at') or '?'}")
     else:
         print("No sessions indexed yet. Run `trailant reindex`.")
 
@@ -117,7 +125,7 @@ def _cmd_close(args) -> None:
         if not trails:
             print("No sessions indexed yet.", file=sys.stderr)
             sys.exit(1)
-        session = max(trails, key=lambda s: s.get("started_at") or "")
+        session = max(trails, key=activity_epoch)
 
     draft = (
         f"Closed session on: {session.get('ai_title') or '(untitled)'}\n"
@@ -147,9 +155,9 @@ def _cmd_close(args) -> None:
           " see self_log.send_via in config.example.yaml.)")
 
 
-def _cmd_today(args) -> None:
-    today = today_str()
-    trails = [s for s in load_trails() if best_effort_date(s) == today]
+def _cmd_today(args, *, now: datetime | None = None) -> None:
+    today = (now or datetime.now()).strftime("%Y-%m-%d")
+    trails = [s for s in load_trails() if best_effort_activity_date(s) == today]
     marks = [m for m in jsonl_store.read_all(marks_path()) if m.get("date") == today]
 
     print(f"=== {today} ===")
@@ -169,14 +177,15 @@ def _cmd_today(args) -> None:
             print(f"  ({m['kind']}) {m['content'][:100]}")
 
 
-def _cmd_week(args) -> None:
-    now = datetime.now()
+def _cmd_week(args, *, now: datetime | None = None) -> None:
+    now = now or datetime.now()
+    today = now.strftime("%Y-%m-%d")
     start = now - timedelta(days=now.weekday())  # Monday
     days = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
 
     trails_by_day: dict[str, list[dict]] = defaultdict(list)
     for s in load_trails():
-        d = best_effort_date(s)
+        d = best_effort_activity_date(s)
         if d in days:
             trails_by_day[d].append(s)
 
@@ -189,7 +198,9 @@ def _cmd_week(args) -> None:
     for d in days:
         sessions = trails_by_day.get(d, [])
         marks = marks_by_day.get(d, [])
-        gap = " (gap day — no activity found)" if not sessions and not marks else ""
+        # Fixed-width zero-padded ISO dates sort lexicographically the same
+        # as chronologically, so a plain string compare is safe here.
+        gap = " (gap day — no activity found)" if (not sessions and not marks and d <= today) else ""
         print(f"\n{d}{gap}")
         for s in sessions:
             print(f"  [{s['source']}] {s.get('ai_title') or '(untitled)'}")
@@ -197,23 +208,23 @@ def _cmd_week(args) -> None:
             print(f"  ({m['kind']}) {m['content'][:100]}")
 
 
-def _cmd_cadence(args) -> None:
+def _cmd_cadence(args, *, now: datetime | None = None) -> None:
     config = load_config()
     baseline_weeks = config.get("cadence", {}).get("baseline_window_weeks", 12)
     valley_flag_after = config.get("cadence", {}).get("valley_flag_after_weeks", 8)
 
     trails = load_trails()
-    counts: Counter[str] = Counter()
-    for s in trails:
-        wk = iso_week(best_effort_date(s))
-        if wk:
-            counts[wk] += 1
-
-    if not counts:
+    if not trails:
         print("No data yet — run `trailant reindex` first.")
         return
 
-    weeks_sorted = sorted(counts.keys())[-baseline_weeks:]
+    counts: Counter[str] = Counter()
+    for s in trails:
+        wk = iso_week(best_effort_activity_date(s))
+        if wk:
+            counts[wk] += 1
+
+    weeks_sorted = recent_iso_weeks(baseline_weeks, today=now)
     values = [counts[w] for w in weeks_sorted]
     avg = sum(values) / len(values) if values else 0
 

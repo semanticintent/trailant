@@ -85,6 +85,34 @@ def test_claude_code_user_set_name_wins_over_ai_title():
     assert meta.ai_title == "tidy the export format"
 
 
+def test_claude_code_derived_session_name_does_not_win_over_ai_title(tmp_path):
+    # Confirmed live against real ~/.claude/sessions/*.json: nameSource
+    # "derived" means Claude Code auto-generated the name (e.g.
+    # "workspace-a7"), not the user — it must not outrank a real ai-title.
+    claude_root = tmp_path / "claude_code"
+    project_dir = claude_root / "-Users-me-code-y"
+    project_dir.mkdir(parents=True)
+    session_id = "e5f6a7b8-1111-2222-3333-444455556666"
+    lines = [
+        {"type": "user", "sessionId": session_id, "uuid": "1", "parentUuid": None,
+         "timestamp": "2026-08-24T13:00:00Z", "message": {"role": "user", "content": "hi"}},
+        {"type": "ai-title", "sessionId": session_id, "aiTitle": "Real ai-title"},
+    ]
+    (project_dir / f"{session_id}.jsonl").write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    (sessions_dir / "7.json").write_text(
+        json.dumps({"pid": 7, "sessionId": session_id, "name": "workspace-xy", "nameSource": "derived"}),
+        encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter(claude_root)
+    meta = adapter.read_metadata(project_dir / f"{session_id}.jsonl")
+
+    assert meta is not None
+    assert meta.ai_title == "Real ai-title"
+
+
 def test_claude_code_malformed_sessions_file_does_not_break_indexing(tmp_path):
     claude_root = tmp_path / "claude_code"
     project_dir = claude_root / "-Users-me-code-x"
