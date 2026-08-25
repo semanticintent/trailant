@@ -229,7 +229,11 @@ def test_resume_print_command_shows_the_real_vendor_resume_command(isolated_home
     cli._cmd_resume(argparse.Namespace(limit=None, html=False, output=None, print_command=True))
     out = capsys.readouterr().out
 
-    assert "resume:  cd /Users/me/code/x && claude --resume s1" in out
+    # Two separate lines, not `cd X && Y` — `&&` chaining is a parse error
+    # on Windows PowerShell 5.1.
+    assert "resume:  cd /Users/me/code/x" in out
+    assert "claude --resume s1" in out
+    assert "&&" not in out
 
 
 def test_resume_without_print_command_omits_resume_line(isolated_home, capsys):

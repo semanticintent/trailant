@@ -88,23 +88,16 @@ Windows box to hand). Roughly ordered by value ÷ how confidently it can be fixe
     included session is flagged. Consider also defaulting `--output`'s target directory to
     `~/.trailant/reports/` rather than the current working directory, since two generated reports
     already ended up inside a project directory during this validation.
-11. **Codex SQL-sourced titles skip the truncation the JSONL-fallback path already has.** Found
-    while fixing #10, not reported externally. In `adapters/codex.py`'s SQL-enrichment block,
-    `sql_title` (`name`/`title`/`first_user_message` from the `threads` row) is used as-is, but the
-    JSONL-derived `first_prompt_title` fallback is truncated to 80 chars. Since Codex's own `title`
-    column is frequently just the raw first message (not a real summary), an untruncated SQL title
-    can occupy several terminal/HTML lines. Apply the same truncation to `sql_title` before it
-    becomes the final `ai_title` candidate.
-12. **`resume --print-command` emits a bash-only `cd X && Y`**, which is a parse error on Windows
-    PowerShell 5.1 (`&&`/`||` chaining arrived in PowerShell 7). Fix needs no OS detection: print
-    the `cd`/resume command as two separate lines instead of one chained line — valid in every
-    shell, including POSIX ones, and each line stays independently copy-pasteable.
-13. **Codex-enriched `project`/`cwd` values may carry a Windows extended-length `\\?\` prefix**
-    (e.g. `\\?\C:\Projects`), inherited from `Path.resolve()` in the SQL-lookup fallback and/or
-    however Codex itself wrote the `cwd` column. Same directory can then render two different ways
-    across rows. Strip a leading `\\?\` (and `\\?\UNC\` → `\\`) at the point metadata is read, not
-    at display time, so every consumer (terminal, `--html`, future `--project` filters) sees the
-    normalized form. Unverified locally — no Windows box to confirm the exact prefix shape against.
+11. ~~Codex SQL-sourced titles skip the truncation the JSONL-fallback path already has.~~ **Fixed.**
+    `sql_title` is now truncated to 80 chars the same way `first_prompt_title` already was.
+12. ~~`resume --print-command` emits a bash-only `cd X && Y`.~~ **Fixed.** The `cd` and resume
+    commands now print as two separate lines — valid in every shell, including Windows PowerShell
+    5.1, and each line stays independently copy-pasteable.
+13. ~~Codex-enriched `project`/`cwd` values may carry a Windows extended-length `\\?\` prefix.~~
+    **Fixed**, though unverified on an actual Windows machine (no box to hand): a leading `\\?\`
+    (and `\\?\UNC\` → `\\`) is now stripped at the point metadata is read, in `adapters/codex.py`,
+    so every consumer sees the normalized form. Covered by fixture tests since a real repro isn't
+    available locally.
 14. **`trailant diff`'s snapshot doesn't track per-session state, only session-id-set/counts/marks.**
     A session that's actively being worked on (more prompts, a title change, an archive flip) but
     was already known produces no signal at all — `diff` only notices sessions appearing/

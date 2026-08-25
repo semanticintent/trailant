@@ -276,6 +276,79 @@ def test_codex_sql_name_wins_over_title_wins_over_first_user_message(tmp_path, m
     assert meta.ai_title == "my custom name"
 
 
+def test_codex_sql_title_is_truncated_to_80_chars_like_the_jsonl_fallback(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    long_title = "x" * 120
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff",
+        "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None,
+        "cwd": None,
+        "title": long_title,
+        "first_user_message": None,
+        "archived": 0,
+        "name": None,
+        "history_mode": "legacy",
+    }])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.ai_title == ("x" * 80) + "..."
+
+
+def test_codex_sql_cwd_strips_windows_extended_length_prefix(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff",
+        "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None,
+        "cwd": "\\\\?\\C:\\Projects\\ingest-from-sql",
+        "title": None,
+        "first_user_message": None,
+        "archived": 0,
+        "name": None,
+        "history_mode": "legacy",
+    }])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.project == "C:\\Projects\\ingest-from-sql"
+
+
+def test_codex_sql_cwd_strips_windows_unc_extended_length_prefix(tmp_path, monkeypatch):
+    rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    build_state_db(codex_home / "state_5.sqlite", [{
+        "id": "019e8b13-aaaa-bbbb-cccc-ddddeeeeffff",
+        "rollout_path": str(rollout),
+        "created_at": None, "updated_at": None,
+        "cwd": "\\\\?\\UNC\\server\\share\\proj",
+        "title": None,
+        "first_user_message": None,
+        "archived": 0,
+        "name": None,
+        "history_mode": "legacy",
+    }])
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    adapter = CodexAdapter(FIXTURES / "codex_sessions")
+    meta = adapter.read_metadata(rollout)
+
+    assert meta is not None
+    assert meta.project == "\\\\server\\share\\proj"
+
+
 def test_codex_sql_missing_rollout_path_column_falls_back_cleanly(tmp_path, monkeypatch):
     rollout = FIXTURES / "codex_sessions" / "2026" / "08" / "22" / "rollout-2026-08-22T09-22-56-019e8b13.jsonl"
     codex_home = tmp_path / "codex_home"

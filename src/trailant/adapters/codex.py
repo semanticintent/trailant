@@ -69,6 +69,17 @@ def _epoch_to_iso(unix_seconds) -> Optional[str]:
         return None
 
 
+def _strip_windows_extended_prefix(value: str) -> str:
+    """Normalize a Windows extended-length path prefix (`\\\\?\\`), which
+    `Path.resolve()` and/or Codex itself can attach to `cwd` — without this,
+    the same directory can render two different ways across sessions."""
+    if value.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + value[len("\\\\?\\UNC\\"):]
+    if value.startswith("\\\\?\\"):
+        return value[len("\\\\?\\"):]
+    return value
+
+
 class CodexAdapter(SourceAdapter):
     name = "codex"
 
@@ -187,6 +198,8 @@ class CodexAdapter(SourceAdapter):
                 if sql_last_ts:
                     last_ts = sql_last_ts
                 sql_title = thread.get("name") or thread.get("title") or thread.get("first_user_message")
+                if sql_title and len(sql_title) > 80:
+                    sql_title = sql_title[:80] + "..."
                 archived = bool(thread.get("archived"))
                 if thread.get("history_mode") == "paginated":
                     sql_prompt_count = self._get_paginated_counts().get(thread.get("id"))
@@ -205,7 +218,7 @@ class CodexAdapter(SourceAdapter):
         return SessionMeta(
             session_id=session_id,
             source=self.name,
-            project=project,
+            project=_strip_windows_extended_prefix(project) if project else project,
             started_at=first_ts,
             ended_at=last_ts,
             prompt_count=prompt_count,

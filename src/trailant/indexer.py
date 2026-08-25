@@ -19,7 +19,7 @@ from .config import enabled_sources, trailant_home
 # force re-parsing of already-indexed, unchanged files — otherwise the
 # mtime/size cache below would keep serving stale metadata (e.g. an old
 # title) forever, since nothing about the source file itself changed.
-INDEX_SCHEMA_VERSION = 6
+INDEX_SCHEMA_VERSION = 7
 
 
 @dataclass

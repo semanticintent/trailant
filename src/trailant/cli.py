@@ -195,7 +195,12 @@ def _cmd_resume(args) -> None:
             template = RESUME_COMMANDS.get(s.get("source"))
             if template:
                 cmd = template.format(session_id=s["session_id"])
-                print(f"              resume:  cd {s.get('project')} && {cmd}")
+                # Two separate lines, not `cd X && Y` — `&&` chaining is a
+                # parse error on Windows PowerShell 5.1 (arrived in pwsh 7),
+                # and this form stays valid and independently copy-pasteable
+                # in every shell, POSIX included.
+                print(f"              resume:  cd {s.get('project')}")
+                print(f"                       {cmd}")
         print()
 
 
